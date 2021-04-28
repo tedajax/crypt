@@ -7,6 +7,8 @@
 
 //// COMPONENTS
 typedef vec2 Position;
+typedef vec2 Velocity;
+typedef vec2 Target;
 
 typedef struct SpriteDraw {
     uint32_t sprite_id;
@@ -19,6 +21,7 @@ typedef struct SpriteDraw {
 
 //// SYSTEMS
 void PushSpritesToRenderQueue(ecs_iter_t* it);
+void InvaderMovement(ecs_iter_t* it);
 
 int main(int argc, char* argv[])
 {
@@ -36,9 +39,12 @@ int main(int argc, char* argv[])
     spr_init();
 
     ECS_COMPONENT(world, Position);
+    ECS_COMPONENT(world, Velocity);
+    ECS_COMPONENT(world, Target);
     ECS_COMPONENT(world, SpriteDraw);
 
     ECS_SYSTEM(world, PushSpritesToRenderQueue, EcsOnStore, Position, SpriteDraw);
+    ECS_SYSTEM(world, InvaderMovement, EcsOnUpdate, Position, Velocity, Target);
 
     ECS_ENTITY(world, PlayerEnt, Position, SpriteDraw);
     ecs_set(world, PlayerEnt, Position, {.x = 0.0f, .y = 0.0f});
@@ -48,13 +54,15 @@ int main(int argc, char* argv[])
     ecs_set(world, PlayerEnt2, Position, {.x = 4.0f, .y = 2.0f});
     ecs_set(world, PlayerEnt2, SpriteDraw, {.sprite_id = 2, .swidth = 1});
 
-    ECS_PREFAB(world, InvaderPrefab, Position, SpriteDraw);
+    ECS_PREFAB(world, InvaderPrefab, Position, Velocity, SpriteDraw, Target);
     ecs_set(world, InvaderPrefab, SpriteDraw, {.sprite_id = 2});
 
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 1000; ++i) {
         ecs_entity_t invader = ecs_new_w_pair(world, EcsIsA, InvaderPrefab);
         Position pos = (Position){.x = txrng_rangef(0.0f, 16.0f), .y = txrng_rangef(0.0f, 9.0f)};
-        ecs_set(world, invader, Position, {.x = pos.x, .y = pos.y});
+        ecs_set(world, invader, Target, {.x = pos.x, .y = pos.y});
+        ecs_set(world, invader, Position, {.x = 0.0f, .y = 0.0f});
+        ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
         ecs_set(world, invader, SpriteDraw, {.sprite_id = 2});
     }
 
@@ -91,5 +99,25 @@ void PushSpritesToRenderQueue(ecs_iter_t* it)
             .scale = {.x = (float)swidth, .y = (float)sheight},
             .origin = origin,
         });
+    }
+}
+
+void InvaderMovement(ecs_iter_t* it)
+{
+    Position* position = ecs_column(it, Position, 1);
+    Velocity* velocity = ecs_column(it, Velocity, 2);
+    Target* target = ecs_column(it, Target, 3);
+
+    for (int i = 0; i < it->count; ++i) {
+        vec2 delta = vec2_sub(target[i], position[i]);
+        vec2 normDir = vec2_norm(delta);
+        float accel = 10.0f;
+        vec2 normVel = vec2_norm(velocity[i]);
+        if (vec2_dot(normDir, normVel) < 0.0f && vec2_len(delta) < 1.0f) {
+            accel *= 2.0f;
+        }
+
+        velocity[i] = vec2_add(velocity[i], vec2_scale(normDir, it->delta_time * accel));
+        position[i] = vec2_add(position[i], vec2_scale(velocity[i], it->delta_time));
     }
 }

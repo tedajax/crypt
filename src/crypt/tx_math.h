@@ -71,6 +71,7 @@ typedef struct quaternion quat;
 typedef struct matrix4x4 mat4;
 
 float clampf(const float v, const float min, const float max);
+float clampf01(const float v);
 float lerpf(const float a, const float b, const float t);
 float nsinf(const float t); // normalized sin [0-1] result with normalized input [0-1] (1 tau)
 float signf(const float v); // v < 0 -> -1, v == 0 > 0, v > 0 -> 1
@@ -171,6 +172,11 @@ quat quat_from_mat4x4(const mat4 m);
 float clampf(const float v, const float min, const float max)
 {
     return (v < min) ? min : (v > max) ? max : v;
+}
+
+float clampf01(const float v)
+{
+    return clampf(v, 0.0f, 1.0f);
 }
 
 float lerpf(const float a, const float b, const float t)
