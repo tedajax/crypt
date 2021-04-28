@@ -1,0 +1,15 @@
+{
+    "options": {
+        "video": {
+            "_display_width": 2240,
+            "_display_height": 1260,
+            "display_width": 1600,
+            "display_height": 900,
+            "enable_vsync": true,
+            "frame_limit": 0
+        }
+    },
+    "startup": {
+        "level": "level"
+    }
+}

@@ -1,0 +1,24 @@
+{
+    "files.associations": {
+        "cmath": "c",
+        "cstddef": "c",
+        "ios": "c",
+        "type_traits": "c",
+        "memory": "cpp",
+        "system_error": "cpp",
+        "vector": "cpp",
+        "xstring": "cpp",
+        "compare": "c",
+        "xtr1common": "cpp",
+        "array": "c",
+        "tuple": "c",
+        "utility": "c",
+        "xmemory": "c",
+        "xutility": "c",
+        "window_system.h": "c",
+        "system_window_sdl2.h": "c",
+        "common_game_components.h": "c"
+    },
+    "cmake.configureOnOpen": true,
+    "game_target": "crypt"
+}
