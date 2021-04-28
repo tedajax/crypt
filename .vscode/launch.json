@@ -10,7 +10,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/bin/${config:game_target}/bin/Win64/Debug",
             "environment": [],
-            "externalConsole": true,
+            "console": "externalTerminal",
             "preLaunchTask": "build"
         },
         {
@@ -22,7 +22,6 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/bin/${config:game_target}/bin/Win64/Release",
             "environment": [],
-            "externalConsole": true,
             "preLaunchTask": "build release"
         },
         {
@@ -34,7 +33,7 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/bin/${config:game_target}/bin/Win64/Debug",
             "environment": [],
-            "externalConsole": true
+            "console": "externalTerminal"
         },
         {
             "name": "(Windows) Run Release",
@@ -45,7 +44,6 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/bin/${config:game_target}/bin/Win64/Release",
             "environment": [],
-            "externalConsole": false
         }
     ]
 }

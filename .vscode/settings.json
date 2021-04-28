@@ -17,8 +17,10 @@
         "xutility": "c",
         "window_system.h": "c",
         "system_window_sdl2.h": "c",
-        "common_game_components.h": "c"
+        "common_game_components.h": "c",
+        "tx_math.h": "c"
     },
     "cmake.configureOnOpen": true,
-    "game_target": "crypt"
+    "game_target": "crypt",
+    "shaderc-lint.defaultGLSLVersion": "3.3"
 }

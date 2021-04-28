@@ -110,4 +110,4 @@ foreach ($platform in $platform_group) {
         Invoke-CreateAssetSymlink -platform $platform -configuration $configuration
     }
 }
-Invoke-CompileShaders
+# Invoke-CompileShaders
