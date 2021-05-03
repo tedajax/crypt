@@ -4,7 +4,7 @@
 
 #define SOKOL_IMPL
 #define SOKOL_GLCORE33
-#define SOKOL_ASSERT TX_ASSERT
+#define SOKOL_ASSERT
 #include "sokol_gfx.h"
 
 #define TX_MATH_IMPLEMENTATION

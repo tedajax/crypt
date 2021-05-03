@@ -18,7 +18,10 @@
         "window_system.h": "c",
         "system_window_sdl2.h": "c",
         "common_game_components.h": "c",
-        "tx_math.h": "c"
+        "tx_math.h": "c",
+        "tx_types.h": "c",
+        "stb_ds.h": "c",
+        "initializer_list": "c"
     },
     "cmake.configureOnOpen": true,
     "game_target": "crypt",

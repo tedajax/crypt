@@ -1,24 +1,49 @@
 #pragma once
 
+#include "flecs.h"
 #include "sokol_gfx.h"
 #include "tx_math.h"
 #include "tx_types.h"
 
-typedef enum sprite_flip {
-    SPRITE_FLIP_NONE = 0,
-    SPRITE_FLIP_X = 1,
-    SPRITE_FLIP_Y = 2,
-} sprite_flip;
+typedef enum sprite_flags {
+    SpriteFlags_None = 0,
+    SpriteFlags_FlipX = 1,
+    SpriteFlags_FlipY = 2,
+} sprite_flags;
 
-struct sprite {
-    vec3 pos;
-    vec4 rect;
-    vec2 origin;
-    vec2 scale;
-};
+typedef struct TdjxSprite {
+    uint16_t sprite_id;
+} TdjxSprite;
 
-void spr_init(void);
-void spr_term(void);
-void spr_render(int width, int height);
-void spr_push_sprite(const struct sprite* sprite);
-vec4 spr_calc_rect(uint32_t sprite_id, sprite_flip flip, uint16_t sw, uint16_t sh);
+typedef struct TdjxSpriteFlags {
+    uint16_t flags;
+} TdjxSpriteFlags;
+
+typedef struct TdjxSpriteSize {
+    uint8_t width;
+    uint8_t height;
+} TdjxSpriteSize;
+
+typedef struct SpriteRenderConfig {
+    float pixels_per_meter;
+    uint32_t canvas_width;
+    uint32_t canvas_height;
+    ecs_entity_t e_window;
+} SpriteRenderConfig;
+
+typedef struct TdjxSpriteRenderer {
+    ECS_DECLARE_COMPONENT(TdjxSprite);
+    ECS_DECLARE_COMPONENT(TdjxSpriteFlags);
+    ECS_DECLARE_COMPONENT(TdjxSpriteSize);
+    ECS_DECLARE_COMPONENT(SpriteRenderConfig);
+} TdjxSpriteRenderer;
+
+vec4 spr_calc_rect(uint32_t sprite_id, sprite_flags flip, uint16_t sw, uint16_t sh);
+
+void TdjxSpriteRendererImport(ecs_world_t* world);
+
+#define TdjxSpriteRendererImportHandles(handles)                                                   \
+    ECS_IMPORT_COMPONENT(handles, TdjxSprite);                                                     \
+    ECS_IMPORT_COMPONENT(handles, TdjxSpriteFlags);                                                \
+    ECS_IMPORT_COMPONENT(handles, TdjxSpriteSize);                                                 \
+    ECS_IMPORT_COMPONENT(handles, SpriteRenderConfig);

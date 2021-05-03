@@ -1,6 +1,5 @@
 #include "system_window_sdl2.h"
 
-#include <GL/gl3w.h>
 #include <SDL2/SDL.h>
 
 static void Sdl2CreateWindow(ecs_iter_t* it)
@@ -10,9 +9,6 @@ static void Sdl2CreateWindow(ecs_iter_t* it)
 
     for (int i = 0; i < it->count; ++i) {
         ecs_entity_t e = it->entities[i];
-
-        bool added = false;
-        Sdl2Window* window = ecs_get_mut(it->world, e, Sdl2Window, &added);
 
         const char* title = (window_desc[i].title) ? window_desc[i].title : "SDL2 Window";
 
@@ -30,15 +26,13 @@ static void Sdl2CreateWindow(ecs_iter_t* it)
                 break;
             }
 
-            window->window = window_ptr;
-        }
-
-        window->gl = SDL_GL_CreateContext(window->window);
-        SDL_GL_SetSwapInterval(1);
-
-        if (gl3wInit() != GL3W_OK) {
-            ecs_err("Failed to initialized GL3w");
-            break;
+            ecs_set(
+                it->world,
+                e,
+                Sdl2Window,
+                {
+                    .window = window_ptr,
+                });
         }
     }
 }
@@ -48,19 +42,7 @@ static void Sdl2DestroyWindow(ecs_iter_t* it)
     Sdl2Window* window = ecs_column(it, Sdl2Window, 1);
 
     for (int i = 0; i < it->count; ++i) {
-        SDL_GL_DeleteContext(window->gl);
         SDL_DestroyWindow(window->window);
-    }
-}
-
-static void Sdl2SwapWindow(ecs_iter_t* it)
-{
-    Sdl2Window* window = ecs_column(it, Sdl2Window, 1);
-
-    for (int i = 0; i < it->count; ++i) {
-        if (window->gl) {
-            SDL_GL_SwapWindow(window->window);
-        }
     }
 }
 
@@ -76,11 +58,10 @@ void SystemSdl2WindowImport(ecs_world_t* world)
     // clang-format off
     ECS_SYSTEM(world, Sdl2CreateWindow, EcsOnSet, 
         [in] system.sdl2.window.WindowDesc,
-        [out] :system.sdl2.window.Sdl2Window);
+        [out] :system.sdl2.window.Window);
     // clang-format on
 
     ECS_SYSTEM(world, Sdl2DestroyWindow, EcsUnSet, Sdl2Window);
-    ECS_SYSTEM(world, Sdl2SwapWindow, EcsOnStore, Sdl2Window);
 
     ECS_EXPORT_COMPONENT(WindowDesc);
 }

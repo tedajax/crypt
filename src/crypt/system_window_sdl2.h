@@ -7,7 +7,6 @@ typedef void* SDL_GL_Context;
 
 typedef struct Sdl2Window {
     SDL_Window* window;
-    SDL_GL_Context gl;
 } Sdl2Window;
 
 typedef struct WindowDesc {
@@ -18,8 +17,11 @@ typedef struct WindowDesc {
 
 typedef struct SystemSdl2Window {
     ECS_DECLARE_COMPONENT(WindowDesc);
+    ECS_DECLARE_COMPONENT(Sdl2Window);
 } SystemSdl2Window;
 
 void SystemSdl2WindowImport(ecs_world_t* world);
 
-#define SystemSdl2WindowImportHandles(handles) ECS_IMPORT_COMPONENT(handles, WindowDesc);
+#define SystemSdl2WindowImportHandles(handles)                                                     \
+    ECS_IMPORT_COMPONENT(handles, WindowDesc);                                                     \
+    ECS_IMPORT_COMPONENT(handles, Sdl2Window);

@@ -3,7 +3,7 @@
 #include "tx_input.h"
 #include <SDL2/SDL.h>
 
-void sdl2_term(ecs_world_t* world, void* ctx)
+void sdl2_fini(ecs_world_t* world, void* ctx)
 {
     SDL_Quit();
 }
@@ -46,7 +46,7 @@ void SystemSdl2Import(ecs_world_t* world)
 {
     ECS_MODULE(world, SystemSdl2);
 
-    ecs_atfini(world, sdl2_term, NULL);
+    ecs_atfini(world, sdl2_fini, NULL);
 
     ECS_TAG(world, Sdl2Input);
 
