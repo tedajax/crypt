@@ -92,15 +92,24 @@ $ms_build_actions = @{
     "Run"         = "FAIL"
 }
 
-$vswhere = "vswhere.exe"
+$vswhere_path = "vswhere.exe"
 
-if (Get-Command $vswhere -ErrorAction SilentlyContinue) {
-    # Deliberately left blank to allow for the else condition.
+if (!(Get-Command $vswhere_path -ErrorAction SilentlyContinue)) {
+    # Try to find vswhere in visual studio install location
+    $vswhere_path = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe";
+    Write-Output $vswhere_path
+    if (!(Test-Path -LiteralPath $vswhere_path -PathType Leaf)) {
+        # Try to find in chocolatey install location
+        $vswhere_path = "${env:ProgramData}\chocolatey\lib\vswhere\tools\vswhere.exe";
+    }
+    if (!(Test-Path -LiteralPath $vswhere_path -PathType Leaf)) {
+        # Give up
+        Write-Output "Unable to find vswhere.exe";
+        exit;
+    }
 }
-else {
-    Write-Host "vswhere.exe not found"
-    exit
-}
+
+Write-Output "Using vswhere.exe located at ""$vswhere_path""";
 
 function Get-InstalledVcpkgList() {
     if ($vcpkg -eq $null) {
@@ -191,7 +200,7 @@ $vswhere_version = "-latest"
 if ($toolset -ne "latest") {
     $vswhere_version = "-version {0}" -f $toolset_version_from_product_line[$toolset]
 }
-$vswhere_cmd = "vswhere $vswhere_version -requires Microsoft.Component.MSBuild"
+$vswhere_cmd = "& ""$vswhere_path"" $vswhere_version -requires Microsoft.Component.MSBuild"
 
 # Get the visual studio product line version number (i.e. 2010, 2012, 2013, 2015, 2017, 2019, etc...)
 # Also determine if an appropriate visual studio is installed.
