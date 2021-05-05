@@ -6,13 +6,13 @@
 typedef vec2 Position;
 typedef vec2 Velocity;
 
-typedef struct TdjxGameComp {
+typedef struct GameComp {
     ECS_DECLARE_COMPONENT(Position);
     ECS_DECLARE_COMPONENT(Velocity);
-} TdjxGameComp;
+} GameComp;
 
-void TdjxGameCompImport(ecs_world_t* world);
+void GameCompImport(ecs_world_t* world);
 
-#define TdjxGameCompImportHandles(handles)                                                         \
+#define GameCompImportHandles(handles)                                                             \
     ECS_IMPORT_COMPONENT(handles, Position);                                                       \
     ECS_IMPORT_COMPONENT(handles, Velocity);

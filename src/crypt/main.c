@@ -1,8 +1,7 @@
-#include "sprite_draw.h"
+#include "game_components.h"
+#include "sprite_renderer.h"
 #include "strhash.h"
 #include "system_sdl2.h"
-#include "system_window_sdl2.h"
-#include "tdjx_game_comp.h"
 #include "tx_math.h"
 #include "tx_rand.h"
 #include <time.h>
@@ -23,13 +22,12 @@ int main(int argc, char* argv[])
     ecs_world_t* world = ecs_init_w_args(argc, argv);
     ecs_set_target_fps(world, 144.0f);
 
-    ECS_IMPORT(world, TdjxGameComp);
+    ECS_IMPORT(world, GameComp);
     ECS_IMPORT(world, SystemSdl2);
-    ECS_IMPORT(world, SystemSdl2Window);
-    ECS_IMPORT(world, TdjxSpriteRenderer);
+    ECS_IMPORT(world, SpriteRenderer);
 
     ecs_entity_t window =
-        ecs_set(world, 0, WindowDesc, {.title = "crypt", .width = 1920, .height = 1080});
+        ecs_set(world, 0, WindowConfig, {.title = "crypt", .width = 1920, .height = 1080});
 
     ecs_entity_t render_config = ecs_set(
         world,
@@ -38,64 +36,30 @@ int main(int argc, char* argv[])
         {
             .e_window = window,
             .pixels_per_meter = 16.0f,
-            .canvas_width = 512 / 2,
-            .canvas_height = 288 / 2,
+            .canvas_width = 256,
+            .canvas_height = 144,
         });
 
     ECS_COMPONENT(world, Target);
 
-    ECS_SYSTEM(
-        world,
-        InvaderMovement,
-        EcsOnUpdate,
-        tdjx.game.comp.Position,
-        tdjx.game.comp.Velocity,
-        Target);
+    ECS_SYSTEM(world, InvaderMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, Target);
 
-    ECS_ENTITY(
-        world,
-        PlayerEnt,
-        tdjx.game.comp.Position,
-        tdjx.game.comp.Velocity,
-        tdjx.sprite.renderer.Sprite);
+    ECS_ENTITY(world, PlayerEnt, game.comp.Position, game.comp.Velocity, sprite.renderer.Sprite);
     ecs_set(world, PlayerEnt, Position, {.x = 0.0f, .y = 0.0f});
     ecs_set(world, PlayerEnt, Velocity, {.x = 0.0f, .y = 0.0f});
-    ecs_set(world, PlayerEnt, TdjxSprite, {.sprite_id = 0});
-    ecs_set(world, PlayerEnt, TdjxSpriteSize, {.width = 2, .height = 1});
-    ecs_set(world, PlayerEnt, TdjxSpriteFlags, {.flags = SpriteFlags_FlipY});
+    ecs_set(world, PlayerEnt, Sprite, {.sprite_id = 0});
+    ecs_set(world, PlayerEnt, SpriteSize, {.width = 2, .height = 1});
+    ecs_set(world, PlayerEnt, SpriteFlags, {.flags = SpriteFlags_FlipY});
 
-    ECS_ENTITY(world, PlayerEn2, tdjx.game.comp.Position, tdjx.sprite.renderer.Sprite);
+    ECS_ENTITY(world, PlayerEn2, game.comp.Position, sprite.renderer.Sprite);
     ecs_set(world, PlayerEn2, Position, {.x = 8.0f, .y = 4.0f});
-    ecs_set(world, PlayerEn2, TdjxSprite, {.sprite_id = 2});
+    ecs_set(world, PlayerEn2, Sprite, {.sprite_id = 0});
+    ecs_set(world, PlayerEn2, SpriteSize, {.width = 2, .height = 1});
 
-    // ECS_ENTITY(world, PlayerEnt2, Position, SpriteDraw);
-    // ecs_set(world, PlayerEnt2, Position, {.x = 4.0f, .y = 2.0f});
-    // ecs_set(world, PlayerEnt2, SpriteDraw, {.sprite_id = 2, .swidth = 1});
-
-    ECS_PREFAB(world, InvaderPrefab, tdjx.sprite.renderer.Sprite);
-    ecs_set(world, InvaderPrefab, TdjxSprite, {.sprite_id = 2});
+    ECS_PREFAB(world, InvaderPrefab, sprite.renderer.Sprite);
+    ecs_set(world, InvaderPrefab, Sprite, {.sprite_id = 2});
 
     for (int i = 0; i < 100; ++i) {
-        // char idbuf[32] = {0};
-        // snprintf(idbuf, 32, "invader_%03d", i);
-        // strhash id = strhash_get(idbuf);
-
-        // ecs_entity_t invader = ecs_new_entity(
-        //     world,
-        //     0,
-        //     strhash_cstr(id),
-        //     "tdjx.game.comp.Position, tdjx.game.comp.Velocity, Target, "
-        //     "tdjx.sprite.renderer.Sprite");
-
-        // ecs_set(world, invader, TdjxSprite, {.sprite_id = 2});
-        // ecs_set(world, invader, Position, {.x = 0.0f, .y = 0.0f});
-        // ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
-        // ecs_set(
-        //     world,
-        //     invader,
-        //     Target,
-        //     {.x = txrng_rangef(0.0f, 16.0f), .y = txrng_rangef(0.0f, 9.0f)});
-
         ecs_entity_t invader = ecs_new_w_pair(world, EcsIsA, InvaderPrefab);
         ecs_set(world, invader, Position, {.x = 0.0f, .y = 0.0f});
         ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
@@ -105,15 +69,6 @@ int main(int argc, char* argv[])
             Target,
             {.x = txrng_rangef(0.0f, 16.0f), .y = txrng_rangef(0.0f, 9.0f)});
     }
-
-    // for (int i = 0; i < 1000; ++i) {
-    //     ecs_entity_t invader = ecs_new_w_pair(world, EcsIsA, InvaderPrefab);
-    //     Position pos = (Position){.x = txrng_rangef(0.0f, 16.0f), .y = txrng_rangef(0.0f, 9.0f)};
-    //     ecs_set(world, invader, Target, {.x = pos.x, .y = pos.y});
-    //     ecs_set(world, invader, Position, {.x = 0.0f, .y = 0.0f});
-    //     ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
-    //     ecs_set(world, invader, SpriteDraw, {.sprite_id = 2});
-    // }
 
     while (ecs_progress(world, 0.0f)) {
     }

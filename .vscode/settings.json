@@ -21,7 +21,10 @@
         "tx_math.h": "c",
         "tx_types.h": "c",
         "stb_ds.h": "c",
-        "initializer_list": "c"
+        "initializer_list": "c",
+        "tdjx_game_comp.h": "c",
+        "system_sdl2.h": "c",
+        "sprite_draw.h": "c"
     },
     "cmake.configureOnOpen": true,
     "game_target": "crypt",

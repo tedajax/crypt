@@ -1,8 +1,8 @@
-#include "tdjx_game_comp.h"
+#include "game_components.h"
 
-void TdjxGameCompImport(ecs_world_t* world)
+void GameCompImport(ecs_world_t* world)
 {
-    ECS_MODULE(world, TdjxGameComp);
+    ECS_MODULE(world, GameComp);
 
     ecs_set_name_prefix(world, "Tdjx");
 

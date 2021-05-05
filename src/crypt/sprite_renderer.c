@@ -1,10 +1,10 @@
-#include "sprite_draw.h"
+#include "sprite_renderer.h"
 #include "futils.h"
+#include "game_components.h"
 #include "stb_ds.h"
 #include "stb_image.h"
 #include "string.h"
-#include "system_window_sdl2.h"
-#include "tdjx_game_comp.h"
+#include "system_sdl2.h"
 #include <GL/gl3w.h>
 #include <SDL2/SDL.h>
 
@@ -49,6 +49,25 @@ typedef struct renderer_resources {
     } screen;
 } renderer_resources;
 
+typedef struct Renderer {
+    SDL_Window* sdl_window;
+    SDL_GLContext gl_context;
+    renderer_resources resources;
+    float pixels_per_meter;
+    uint32_t canvas_width;
+    uint32_t canvas_height;
+    struct sprite* sprites;
+    ecs_query_t* q_sprites;
+} Renderer;
+
+// private interface
+vec4 spr_calc_rect(uint32_t sprite_id, sprite_flags flip, uint16_t sw, uint16_t sh);
+renderer_resources init_renderer_resources(
+    SDL_Window* window,
+    int initial_cap,
+    uint32_t canvas_width,
+    uint32_t canvas_height);
+
 vec4 spr_calc_rect(uint32_t sprite_id, sprite_flags flip, uint16_t sw, uint16_t sh)
 {
     const int tc = 8;
@@ -72,21 +91,9 @@ vec4 spr_calc_rect(uint32_t sprite_id, sprite_flags flip, uint16_t sw, uint16_t 
     return (vec4){(col + fx) / tcf, (row + fy) / tcf, fw / tc, fh / tc};
 }
 
-typedef struct Renderer {
-    SDL_Window* sdl_window;
-    SDL_GLContext gl_context;
-    renderer_resources resources;
-    float pixels_per_meter;
-    uint32_t canvas_width;
-    uint32_t canvas_height;
-    struct sprite* sprites;
-    ecs_query_t* q_sprites;
-} Renderer;
-
-// TODO: max_sprites refactor
 renderer_resources init_renderer_resources(
     SDL_Window* window,
-    int max_sprites,
+    int initial_cap,
     uint32_t canvas_width,
     uint32_t canvas_height)
 {
@@ -136,7 +143,7 @@ renderer_resources init_renderer_resources(
 
     resources.inst_vbuf = sg_make_buffer(&(sg_buffer_desc){
         .usage = SG_USAGE_STREAM,
-        .size = sizeof(struct sprite) * max_sprites,
+        .size = sizeof(struct sprite) * initial_cap,
     });
 
     {
@@ -332,7 +339,7 @@ void AttachRenderer(ecs_iter_t* it)
     SpriteRenderConfig* config = ecs_column(it, SpriteRenderConfig, 1);
     ecs_entity_t ecs_typeid(Renderer) = ecs_column_entity(it, 2);
 
-    ecs_entity_t ecs_typeid(Sdl2Window) = ecs_lookup_fullpath(world, "system.sdl2.window.Window");
+    ecs_entity_t ecs_typeid(Sdl2Window) = ecs_lookup_fullpath(world, "system.sdl2.Window");
 
     for (int i = 0; i < it->count; ++i) {
         const Sdl2Window* window = ecs_get(world, config->e_window, Sdl2Window);
@@ -356,8 +363,8 @@ void AttachRenderer(ecs_iter_t* it)
             sdl_window, (int)arrcap(sprites), config[i].canvas_width, config[i].canvas_height);
         ecs_query_t* q_sprites = ecs_query_new(
             world,
-            "tdjx.game.comp.Position, ANY:tdjx.sprite.renderer.Sprite, "
-            "?tdjx.sprite.renderer.SpriteFlags, ?tdjx.sprite.renderer.SpriteSize");
+            "game.comp.Position, ANY:sprite.renderer.Sprite, "
+            "?sprite.renderer.SpriteFlags, ?sprite.renderer.SpriteSize");
 
         ecs_set(
             world,
@@ -445,9 +452,9 @@ void UpdateBuffers(ecs_iter_t* it)
         ecs_iter_t qit = ecs_query_iter(query);
         while (ecs_query_next(&qit)) {
             Position* pos = ecs_column(&qit, Position, 1);
-            TdjxSprite* spr = ecs_column(&qit, TdjxSprite, 2);
-            TdjxSpriteFlags* flag = ecs_column(&qit, TdjxSpriteFlags, 3);
-            TdjxSpriteSize* ssize = ecs_column(&qit, TdjxSpriteSize, 4);
+            Sprite* spr = ecs_column(&qit, Sprite, 2);
+            SpriteFlags* flag = ecs_column(&qit, SpriteFlags, 3);
+            SpriteSize* ssize = ecs_column(&qit, SpriteSize, 4);
 
             for (int32_t j = 0; j < qit.count; ++j) {
                 vec3 position = (vec3){.x = pos[j].x, .y = pos[j].y};
@@ -498,17 +505,15 @@ void UpdateBuffers(ecs_iter_t* it)
     }
 }
 
-void TdjxSpriteRendererImport(ecs_world_t* world)
+void SpriteRendererImport(ecs_world_t* world)
 {
-    ECS_MODULE(world, TdjxSpriteRenderer);
+    ECS_MODULE(world, SpriteRenderer);
 
-    ecs_set_name_prefix(world, "Tdjx");
+    ECS_IMPORT(world, GameComp);
 
-    ECS_IMPORT(world, TdjxGameComp);
-
-    ECS_COMPONENT(world, TdjxSprite);
-    ECS_COMPONENT(world, TdjxSpriteFlags);
-    ECS_COMPONENT(world, TdjxSpriteSize);
+    ECS_COMPONENT(world, Sprite);
+    ECS_COMPONENT(world, SpriteFlags);
+    ECS_COMPONENT(world, SpriteSize);
     ECS_COMPONENT(world, SpriteRenderConfig);
 
     ECS_COMPONENT(world, Renderer);
@@ -523,8 +528,8 @@ void TdjxSpriteRendererImport(ecs_world_t* world)
     ECS_SYSTEM(world, Render, EcsPostFrame, Renderer);
     // clang-format on
 
-    ECS_EXPORT_COMPONENT(TdjxSprite);
-    ECS_EXPORT_COMPONENT(TdjxSpriteFlags);
-    ECS_EXPORT_COMPONENT(TdjxSpriteSize);
+    ECS_EXPORT_COMPONENT(Sprite);
+    ECS_EXPORT_COMPONENT(SpriteFlags);
+    ECS_EXPORT_COMPONENT(SpriteSize);
     ECS_EXPORT_COMPONENT(SpriteRenderConfig);
 }
