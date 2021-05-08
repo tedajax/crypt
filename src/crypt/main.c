@@ -2,6 +2,7 @@
 #include "sprite_renderer.h"
 #include "strhash.h"
 #include "system_sdl2.h"
+#include "tx_input.h"
 #include "tx_math.h"
 #include "tx_rand.h"
 #include <time.h>
@@ -9,10 +10,16 @@
 //// COMPONENTS
 typedef vec2 Target;
 
+typedef struct TankInput {
+    float move;
+    bool fire;
+} TankInput;
 //// TAGS
 
 //// SYSTEMS
 void InvaderMovement(ecs_iter_t* it);
+void TankGatherInput(ecs_iter_t* it);
+void TankMovement(ecs_iter_t* it);
 
 int main(int argc, char* argv[])
 {
@@ -35,26 +42,25 @@ int main(int argc, char* argv[])
         SpriteRenderConfig,
         {
             .e_window = window,
-            .pixels_per_meter = 16.0f,
+            .pixels_per_meter = 8.0f,
             .canvas_width = 256,
             .canvas_height = 144,
         });
 
     ECS_COMPONENT(world, Target);
+    ECS_COMPONENT(world, TankInput);
 
+    ECS_SYSTEM(world, TankGatherInput, EcsPreUpdate, TankInput);
+    ECS_SYSTEM(world, TankMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, TankInput);
     ECS_SYSTEM(world, InvaderMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, Target);
 
-    ECS_ENTITY(world, PlayerEnt, game.comp.Position, game.comp.Velocity, sprite.renderer.Sprite);
-    ecs_set(world, PlayerEnt, Position, {.x = 0.0f, .y = 0.0f});
-    ecs_set(world, PlayerEnt, Velocity, {.x = 0.0f, .y = 0.0f});
-    ecs_set(world, PlayerEnt, Sprite, {.sprite_id = 0});
-    ecs_set(world, PlayerEnt, SpriteSize, {.width = 2, .height = 1});
-    ecs_set(world, PlayerEnt, SpriteFlags, {.flags = SpriteFlags_FlipY});
-
-    ECS_ENTITY(world, PlayerEn2, game.comp.Position, sprite.renderer.Sprite);
-    ecs_set(world, PlayerEn2, Position, {.x = 8.0f, .y = 4.0f});
-    ecs_set(world, PlayerEn2, Sprite, {.sprite_id = 0});
-    ecs_set(world, PlayerEn2, SpriteSize, {.width = 2, .height = 1});
+    ECS_ENTITY(
+        world, Tank, game.comp.Position, game.comp.Velocity, TankInput, sprite.renderer.Sprite);
+    ecs_set(world, Tank, Position, {.x = 15.0f, .y = 17.0f});
+    ecs_set(world, Tank, Velocity, {.x = 0.0f, .y = 0.0f});
+    // ecs_set(world, Tank, TankInput, {0});
+    ecs_set(world, Tank, Sprite, {.sprite_id = 0});
+    ecs_set(world, Tank, SpriteSize, {.width = 2, .height = 1});
 
     ECS_PREFAB(world, InvaderPrefab, sprite.renderer.Sprite);
     ecs_set(world, InvaderPrefab, Sprite, {.sprite_id = 2});
@@ -99,5 +105,31 @@ void InvaderMovement(ecs_iter_t* it)
         }
         velocity[i] = vel;
         position[i] = vec2_add(position[i], vec2_scale(velocity[i], it->delta_time));
+    }
+}
+
+void TankGatherInput(ecs_iter_t* it)
+{
+    TankInput* input = ecs_column(it, TankInput, 1);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        float move = 0.0f;
+
+        if (txinp_get_key(TXINP_KEY_LEFT)) move -= 1.0f;
+        if (txinp_get_key(TXINP_KEY_RIGHT)) move += 1.0f;
+
+        input[i].move = move;
+        input[i].fire = txinp_get_key_down(TXINP_KEY_Z);
+    }
+}
+
+void TankMovement(ecs_iter_t* it)
+{
+    Position* position = ecs_column(it, Position, 1);
+    Velocity* velocity = ecs_column(it, Velocity, 2);
+    TankInput* input = ecs_column(it, TankInput, 3);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        position[i].x += input[i].move * 32.0f * it->delta_time;
     }
 }
