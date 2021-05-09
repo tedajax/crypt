@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
         world, Tank, game.comp.Position, game.comp.Velocity, TankInput, sprite.renderer.Sprite);
     ecs_set(world, Tank, Position, {.x = 15.0f, .y = 17.0f});
     ecs_set(world, Tank, Velocity, {.x = 0.0f, .y = 0.0f});
-    // ecs_set(world, Tank, TankInput, {0});
+    ecs_set(world, Tank, TankInput, {0});
     ecs_set(world, Tank, Sprite, {.sprite_id = 0});
     ecs_set(world, Tank, SpriteSize, {.width = 2, .height = 1});
 
@@ -105,6 +105,8 @@ void InvaderMovement(ecs_iter_t* it)
         }
         velocity[i] = vel;
         position[i] = vec2_add(position[i], vec2_scale(velocity[i], it->delta_time));
+
+        draw_line_col(position[i], target[i], (vec4){.x = 1.0f, .z = 1.0f, .w = 1.0f});
     }
 }
 
@@ -121,6 +123,12 @@ void TankGatherInput(ecs_iter_t* it)
         input[i].move = move;
         input[i].fire = txinp_get_key_down(TXINP_KEY_Z);
     }
+
+    draw_vgrad(
+        (vec2){.x = 0.0f, .y = 0.0f},
+        (vec2){.x = 32.0f, .y = 18.0f},
+        (vec4){.x = 0.0f, .y = 1.0f, .z = 1.0f, .w = 1.0f},
+        (vec4){.x = 1.0f, .y = 0.8f, .z = 0.0f, .w = 0.0f});
 }
 
 void TankMovement(ecs_iter_t* it)

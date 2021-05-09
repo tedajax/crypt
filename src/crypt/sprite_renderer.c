@@ -21,20 +21,48 @@ struct vertex {
     vec2 uv;
 };
 
+struct vertex_color {
+    vec2 pos;
+    vec4 col;
+};
+
+struct prim_line {
+    struct vertex_color v[2];
+};
+
+struct prim_rect {
+    struct vertex_color v[4];
+};
+
 typedef struct uniform_block {
     mat4 view_proj;
 } uniform_block;
 
 typedef struct renderer_resources {
+    // sprite atlas
+    sg_image atlas;
+
+    // sprite buffers
     sg_buffer geom_vbuf;
     sg_buffer geom_ibuf;
     sg_buffer inst_vbuf;
-    sg_image atlas;
+
+    // primitive line buffers
+    sg_buffer line_vbuf;
+
+    // primitive rect buffers
+    sg_buffer rect_vbuf;
+    sg_buffer rect_ibuf;
 
     struct {
-        sg_shader shader;
+        sg_shader sprite_shader;
+        sg_shader prim_shader;
         sg_pipeline pip;
         sg_bindings bindings;
+        sg_pipeline line_pip;
+        sg_bindings line_bindings;
+        sg_pipeline rect_pip;
+        sg_bindings rect_bindings;
         sg_pass pass;
         sg_pass_action pass_action;
         sg_image color_img;
@@ -57,8 +85,14 @@ typedef struct Renderer {
     uint32_t canvas_width;
     uint32_t canvas_height;
     struct sprite* sprites;
+    struct prim_line* lines;
+    struct prim_rect* rects;
+    uint32_t* rect_indices;
     ecs_query_t* q_sprites;
 } Renderer;
+
+// private state
+ecs_query_t* q_renderer = NULL;
 
 // private interface
 vec4 spr_calc_rect(uint32_t sprite_id, sprite_flags flip, uint16_t sw, uint16_t sh);
@@ -70,7 +104,7 @@ renderer_resources init_renderer_resources(
 
 vec4 spr_calc_rect(uint32_t sprite_id, sprite_flags flip, uint16_t sw, uint16_t sh)
 {
-    const int tc = 8;
+    const int tc = 16;
     const float tcf = (float)tc;
 
     uint32_t row = sprite_id / tc;
@@ -146,6 +180,23 @@ renderer_resources init_renderer_resources(
         .size = sizeof(struct sprite) * initial_cap,
     });
 
+    resources.line_vbuf = sg_make_buffer(&(sg_buffer_desc){
+        .usage = SG_USAGE_STREAM,
+        .size = sizeof(struct prim_line) * 256,
+    });
+
+    resources.rect_vbuf = sg_make_buffer(&(sg_buffer_desc){
+        .usage = SG_USAGE_STREAM,
+        .size = sizeof(struct prim_rect) * 256,
+    });
+
+    resources.rect_ibuf = sg_make_buffer(&(sg_buffer_desc){
+        .type = SG_BUFFERTYPE_INDEXBUFFER,
+        .usage = SG_USAGE_STREAM,
+        .size = sizeof(uint32_t) * 256 * 6,
+    });
+
+    // load sprite shader
     {
         char* vs_buffer;
         char* fs_buffer;
@@ -158,7 +209,7 @@ renderer_resources init_renderer_resources(
 
         TX_ASSERT(vs_result == TX_SUCCESS && fs_result == TX_SUCCESS);
 
-        resources.canvas.shader = sg_make_shader(&(sg_shader_desc){
+        resources.canvas.sprite_shader = sg_make_shader(&(sg_shader_desc){
             .vs.uniform_blocks[0] =
                 {
                     .size = sizeof(uniform_block),
@@ -168,6 +219,36 @@ renderer_resources init_renderer_resources(
                         },
                 },
             .fs.images[0] = {.name = "atlas", .type = SG_IMAGETYPE_2D},
+            .vs.source = vs_buffer,
+            .fs.source = fs_buffer,
+        });
+
+        free(vs_buffer);
+        free(fs_buffer);
+    }
+
+    // load primitive shader
+    {
+        char* vs_buffer;
+        char* fs_buffer;
+        size_t vs_len, fs_len;
+
+        enum tx_result vs_result =
+            read_file_to_buffer("assets/shaders/primitive.vert", &vs_buffer, &vs_len);
+        enum tx_result fs_result =
+            read_file_to_buffer("assets/shaders/primitive.frag", &fs_buffer, &fs_len);
+
+        TX_ASSERT(vs_result == TX_SUCCESS && fs_result == TX_SUCCESS);
+
+        resources.canvas.prim_shader = sg_make_shader(&(sg_shader_desc){
+            .vs.uniform_blocks[0] =
+                {
+                    .size = sizeof(uniform_block),
+                    .uniforms =
+                        {
+                            [0] = {.name = "view_proj", .type = SG_UNIFORMTYPE_MAT4},
+                        },
+                },
             .vs.source = vs_buffer,
             .fs.source = fs_buffer,
         });
@@ -195,7 +276,7 @@ renderer_resources init_renderer_resources(
 
     // default render states are fine for triangle
     resources.canvas.pip = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader = resources.canvas.shader,
+        .shader = resources.canvas.sprite_shader,
         .index_type = SG_INDEXTYPE_UINT16,
         .layout =
             {
@@ -262,7 +343,7 @@ renderer_resources init_renderer_resources(
                 .src_factor_alpha = SG_BLENDFACTOR_ONE,
                 .dst_factor_alpha = SG_BLENDFACTOR_ZERO,
             },
-        .rasterizer.cull_mode = SG_CULLMODE_BACK,
+        .rasterizer.cull_mode = SG_CULLMODE_NONE,
     });
 
     resources.canvas.bindings = (sg_bindings){
@@ -273,6 +354,96 @@ renderer_resources init_renderer_resources(
             },
         .index_buffer = resources.geom_ibuf,
         .fs_images[0] = resources.atlas,
+    };
+
+    resources.canvas.line_pip = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader = resources.canvas.prim_shader,
+        .index_type = SG_INDEXTYPE_NONE,
+        .primitive_type = SG_PRIMITIVETYPE_LINES,
+        .layout =
+            {
+                .buffers[0] = {.stride = sizeof(struct vertex_color)},
+                .attrs =
+                    {
+                        [0] =
+                            {
+                                .format = SG_VERTEXFORMAT_FLOAT2,
+                                .offset = 0,
+                                .buffer_index = 0,
+                            },
+                        [1] =
+                            {
+                                .format = SG_VERTEXFORMAT_FLOAT4,
+                                .offset = 8,
+                                .buffer_index = 0,
+                            },
+                    },
+            },
+        .depth_stencil =
+            {
+                .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL,
+                .depth_write_enabled = false,
+            },
+        .blend =
+            {
+                .enabled = true,
+                .depth_format = SG_PIXELFORMAT_DEPTH,
+                .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
+                .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                .src_factor_alpha = SG_BLENDFACTOR_ONE,
+                .dst_factor_alpha = SG_BLENDFACTOR_ZERO,
+            },
+    });
+
+    resources.canvas.line_bindings = (sg_bindings){
+        .vertex_buffers[0] = resources.line_vbuf,
+    };
+
+    resources.canvas.rect_pip = sg_make_pipeline(&(sg_pipeline_desc){
+        .shader = resources.canvas.prim_shader,
+        .index_type = SG_INDEXTYPE_UINT32,
+        .layout =
+            {
+                .buffers =
+                    {
+                        [0] = {.stride = sizeof(struct vertex_color)},
+                    },
+                .attrs =
+                    {
+                        [0] =
+                            {
+                                .format = SG_VERTEXFORMAT_FLOAT2,
+                                .offset = 0,
+                                .buffer_index = 0,
+                            },
+                        [1] =
+                            {
+                                .format = SG_VERTEXFORMAT_FLOAT4,
+                                .offset = 8,
+                                .buffer_index = 0,
+                            },
+                    },
+            },
+        .depth_stencil =
+            {
+                .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL,
+                .depth_write_enabled = false,
+            },
+        .blend =
+            {
+                .enabled = true,
+                .depth_format = SG_PIXELFORMAT_DEPTH,
+                .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
+                .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                .src_factor_alpha = SG_BLENDFACTOR_ONE,
+                .dst_factor_alpha = SG_BLENDFACTOR_ZERO,
+            },
+        .rasterizer.cull_mode = SG_CULLMODE_NONE,
+    });
+
+    resources.canvas.rect_bindings = (sg_bindings){
+        .vertex_buffers[0] = resources.rect_vbuf,
+        .index_buffer = resources.rect_ibuf,
     };
 
     // Configure screen full-screen quad render
@@ -316,7 +487,7 @@ renderer_resources init_renderer_resources(
             },
     });
 
-    float data = 0.0f;
+    static const float data = 0.0f;
     resources.screen.bindings = (sg_bindings){
         .vertex_buffers[0] = sg_make_buffer(&(sg_buffer_desc){
             .usage = SG_USAGE_IMMUTABLE,
@@ -331,6 +502,119 @@ renderer_resources init_renderer_resources(
     };
 
     return resources;
+}
+
+void draw_line_col2(vec2 from, vec2 to, vec4 col0, vec4 col1)
+{
+    if (!q_renderer) {
+        return;
+    }
+
+    ecs_iter_t it = ecs_query_iter(q_renderer);
+    while (ecs_query_next(&it)) {
+        Renderer* r = ecs_column(&it, Renderer, 1);
+        struct prim_line line = {
+            .v[0] = {.pos = from, .col = col0},
+            .v[1] = {.pos = to, .col = col1},
+        };
+
+        for (int32_t i = 0; i < it.count; ++i) {
+            size_t prev_cap = arrcap(r[i].lines);
+            arrput(r[i].lines, line);
+
+            size_t cap = arrcap(r[i].lines);
+            if (cap > prev_cap) {
+                sg_destroy_buffer(r[i].resources.line_vbuf);
+                r[i].resources.line_vbuf = sg_make_buffer(&(sg_buffer_desc){
+                    .usage = SG_USAGE_STREAM,
+                    .size = (int)(sizeof(struct prim_line) * cap),
+                });
+                r[i].resources.canvas.line_bindings.vertex_buffers[0] = r[i].resources.line_vbuf;
+            }
+        }
+    }
+}
+
+void draw_line_col(vec2 from, vec2 to, vec4 col)
+{
+    draw_line_col2(from, to, col, col);
+}
+
+void draw_line(vec2 from, vec2 to)
+{
+    static vec4 white = {1.0f, 1.0f, 1.0f, 1.0f};
+    draw_line_col2(from, to, white, white);
+}
+
+void draw_rect_col4(vec2 p0, vec2 p1, vec4 cols[4])
+{
+    if (!q_renderer) {
+        return;
+    }
+    const static uint32_t index_offsets[6] = {0, 2, 3, 0, 1, 2};
+
+    ecs_iter_t it = ecs_query_iter(q_renderer);
+    while (ecs_query_next(&it)) {
+        Renderer* r = ecs_column(&it, Renderer, 1);
+
+        for (int32_t i = 0; i < it.count; ++i) {
+            size_t prev_cap = arrcap(r[i].rects);
+
+            uint32_t base_idx = (uint32_t)(arrlen(r[i].rect_indices) / 6) * 4;
+
+            arrput(
+                r[i].rects,
+                ((struct prim_rect){
+                    .v =
+                        {
+                            [0] = {.pos = p0, .col = cols[0]},
+                            [1] = {.pos = (vec2){.x = p1.x, .y = p0.y}, .col = cols[1]},
+                            [2] = {.pos = p1, .col = cols[2]},
+                            [3] = {.pos = (vec2){.x = p0.x, .y = p1.y}, .col = cols[3]},
+                        },
+                }));
+
+            for (int32_t j = 0; j < 6; ++j) {
+                arrput(r[i].rect_indices, base_idx + index_offsets[j]);
+            }
+
+            size_t cap = arrcap(r[i].rects);
+            if (cap > prev_cap) {
+                sg_destroy_buffer(r[i].resources.rect_vbuf);
+                sg_destroy_buffer(r[i].resources.rect_ibuf);
+
+                r[i].resources.rect_vbuf = sg_make_buffer(&(sg_buffer_desc){
+                    .usage = SG_USAGE_STREAM,
+                    .size = (int)(sizeof(struct prim_rect) * cap),
+                });
+                r[i].resources.rect_ibuf = sg_make_buffer(&(sg_buffer_desc){
+                    .usage = SG_USAGE_STREAM,
+                    .size = (int)(sizeof(uint32_t) * 6 * cap),
+                });
+
+                r[i].resources.canvas.rect_bindings.vertex_buffers[0] = r[i].resources.rect_vbuf;
+                r[i].resources.canvas.rect_bindings.index_buffer = r[i].resources.rect_ibuf;
+            }
+        }
+    }
+}
+
+void draw_rect_col(vec2 p0, vec2 p1, vec4 col)
+{
+    vec4 cols[4] = {col, col, col, col};
+    draw_rect_col4(p0, p1, cols);
+}
+
+void draw_vgrad(vec2 p0, vec2 p1, vec4 top, vec4 bot)
+{
+    vec4 cols[4] = {top, top, bot, bot};
+    draw_rect_col4(p0, p1, cols);
+}
+
+void draw_hgrad(vec2 p0, vec2 p1, vec4 left, vec4 right)
+{
+    vec4 cols[4] = {left, right, left, right};
+    draw_rect_col4(p0, p1, cols);
 }
 
 void AttachRenderer(ecs_iter_t* it)
@@ -359,6 +643,14 @@ void AttachRenderer(ecs_iter_t* it)
         struct sprite* sprites = NULL;
         arrsetcap(sprites, 256);
 
+        struct prim_line* lines = NULL;
+        arrsetcap(lines, 256);
+
+        struct prim_rect* rects = NULL;
+        uint32_t* rect_indices = NULL;
+        arrsetcap(rects, 256);
+        arrsetcap(rect_indices, 256 * 6);
+
         renderer_resources resources = init_renderer_resources(
             sdl_window, (int)arrcap(sprites), config[i].canvas_width, config[i].canvas_height);
         ecs_query_t* q_sprites = ecs_query_new(
@@ -374,6 +666,9 @@ void AttachRenderer(ecs_iter_t* it)
                 .resources = resources,
                 .sdl_window = sdl_window,
                 .sprites = sprites,
+                .lines = lines,
+                .rects = rects,
+                .rect_indices = rect_indices,
                 .gl_context = ctx,
                 .pixels_per_meter = config[i].pixels_per_meter,
                 .canvas_width = config[i].canvas_width,
@@ -389,54 +684,25 @@ void DetachRenderer(ecs_iter_t* it)
 
     for (int i = 0; i < it->count; ++i) {
         arrfree(r[i].sprites);
+        arrfree(r[i].lines);
+        arrfree(r[i].rects);
+        arrfree(r[i].rect_indices);
+
         ecs_query_free(r[i].q_sprites);
+
         sg_shutdown();
         SDL_GL_DeleteContext(r[i].gl_context);
     }
 }
 
-void Render(ecs_iter_t* it)
+void RendererNewFrame(ecs_iter_t* it)
 {
-    ecs_world_t* world = it->world;
     Renderer* r = ecs_column(it, Renderer, 1);
 
-    for (int i = 0; i < it->count; ++i) {
-        int width, height;
-        SDL_GL_GetDrawableSize(r[i].sdl_window, &width, &height);
-
-        const float aspect = (float)r[i].canvas_width / r[i].canvas_height;
-        float view_width = r[i].canvas_width / r[i].pixels_per_meter;
-        float view_height = r[i].canvas_height / r[i].pixels_per_meter;
-
-        mat4 view = mat4_look_at((vec3){0, 0, 100}, (vec3){0, 0, -1}, (vec3){0, 1, 0});
-        mat4 projection = mat4_ortho(0, view_width, view_height, 0, 0.0f, 250.0f);
-        mat4 view_proj = mat4_mul(projection, view);
-
-        sg_begin_pass(
-            r->resources.canvas.pass,
-            &(sg_pass_action){
-                .colors[0] =
-                    {
-                        .action = SG_ACTION_CLEAR,
-                        .val = {0.0f, 0.0f, 0.0f, 1.0f},
-                    },
-            });
-
-        sg_apply_pipeline(r->resources.canvas.pip);
-        sg_apply_bindings(&r->resources.canvas.bindings);
-        uniform_block uniforms = {.view_proj = view_proj};
-        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniform_block));
-        sg_draw(0, 6, (int)arrlen(r->sprites));
-        sg_end_pass();
-
-        sg_begin_default_pass(&r[i].resources.screen.pass_action, width, height);
-        sg_apply_pipeline(r[i].resources.screen.pip);
-        sg_apply_bindings(&r[i].resources.screen.bindings);
-        sg_draw(0, 6, 1);
-        sg_end_pass();
-
-        sg_commit();
-        SDL_GL_SwapWindow(r->sdl_window);
+    for (int32_t i = 0; i < it->count; ++i) {
+        arrsetlen(r[i].lines, 0);
+        arrsetlen(r[i].rects, 0);
+        arrsetlen(r[i].rect_indices, 0);
     }
 }
 
@@ -502,12 +768,93 @@ void UpdateBuffers(ecs_iter_t* it)
             r[i].resources.inst_vbuf,
             r[i].sprites,
             (int)(sizeof(struct sprite) * arrlenu(r[i].sprites)));
+
+        sg_update_buffer(
+            r[i].resources.line_vbuf,
+            r[i].lines,
+            (int)(sizeof(struct prim_line) * arrlenu(r[i].lines)));
+
+        sg_update_buffer(
+            r[i].resources.rect_vbuf,
+            r[i].rects,
+            (int)(sizeof(struct prim_rect) * arrlenu(r[i].rects)));
+
+        sg_update_buffer(
+            r[i].resources.rect_ibuf,
+            r[i].rect_indices,
+            (int)(sizeof(uint32_t) * arrlenu(r[i].rect_indices)));
     }
+}
+
+void Render(ecs_iter_t* it)
+{
+    ecs_world_t* world = it->world;
+    Renderer* r = ecs_column(it, Renderer, 1);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        int width, height;
+        SDL_GL_GetDrawableSize(r[i].sdl_window, &width, &height);
+
+        const float aspect = (float)r[i].canvas_width / r[i].canvas_height;
+        float view_width = r[i].canvas_width / r[i].pixels_per_meter;
+        float view_height = r[i].canvas_height / r[i].pixels_per_meter;
+
+        mat4 view = mat4_look_at((vec3){0, 0, 100}, (vec3){0, 0, -1}, (vec3){0, 1, 0});
+        mat4 projection = mat4_ortho(0, view_width, view_height, 0, 0.0f, 250.0f);
+        mat4 view_proj = mat4_mul(projection, view);
+
+        sg_begin_pass(
+            r[i].resources.canvas.pass,
+            &(sg_pass_action){
+                .colors[0] =
+                    {
+                        .action = SG_ACTION_CLEAR,
+                        .val = {0.0f, 0.0f, 0.0f, 1.0f},
+                    },
+            });
+
+        uniform_block uniforms = {.view_proj = view_proj};
+        sg_apply_pipeline(r[i].resources.canvas.pip);
+        sg_apply_bindings(&r[i].resources.canvas.bindings);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniform_block));
+        sg_draw(0, 6, (int)arrlen(r[i].sprites));
+
+        sg_apply_pipeline(r[i].resources.canvas.rect_pip);
+        sg_apply_bindings(&r[i].resources.canvas.rect_bindings);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniform_block));
+        int rect_idx_ct = (int)arrlen(r[i].rect_indices);
+        int rect_ct = (int)arrlen(r[i].rects);
+        sg_draw(0, 6, 1);
+
+        sg_apply_pipeline(r[i].resources.canvas.line_pip);
+        sg_apply_bindings(&r[i].resources.canvas.line_bindings);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniform_block));
+        int line_elems = (int)arrlen(r[i].lines);
+        sg_draw(0, line_elems * 2, line_elems);
+
+        sg_end_pass();
+
+        sg_begin_default_pass(&r[i].resources.screen.pass_action, width, height);
+        sg_apply_pipeline(r[i].resources.screen.pip);
+        sg_apply_bindings(&r[i].resources.screen.bindings);
+        sg_draw(0, 6, 1);
+        sg_end_pass();
+
+        sg_commit();
+        SDL_GL_SwapWindow(r[i].sdl_window);
+    }
+}
+
+void renderer_fini(ecs_world_t* world, void* ctx)
+{
+    ecs_query_free(q_renderer);
 }
 
 void SpriteRendererImport(ecs_world_t* world)
 {
     ECS_MODULE(world, SpriteRenderer);
+
+    ecs_atfini(world, renderer_fini, NULL);
 
     ECS_IMPORT(world, GameComp);
 
@@ -524,9 +871,12 @@ void SpriteRendererImport(ecs_world_t* world)
         [out] :Renderer);
     ECS_SYSTEM(world, DetachRenderer, EcsUnSet, Renderer);
 
+    ECS_SYSTEM(world, RendererNewFrame, EcsPreFrame, Renderer);
     ECS_SYSTEM(world, UpdateBuffers, EcsOnStore, Renderer);
     ECS_SYSTEM(world, Render, EcsPostFrame, Renderer);
     // clang-format on
+
+    q_renderer = ecs_query_new(world, "sprite.renderer.Renderer");
 
     ECS_EXPORT_COMPONENT(Sprite);
     ECS_EXPORT_COMPONENT(SpriteFlags);

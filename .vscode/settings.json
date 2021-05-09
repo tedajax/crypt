@@ -24,7 +24,8 @@
         "initializer_list": "c",
         "tdjx_game_comp.h": "c",
         "system_sdl2.h": "c",
-        "sprite_draw.h": "c"
+        "sprite_draw.h": "c",
+        "tx_input.h": "c"
     },
     "cmake.configureOnOpen": true,
     "game_target": "crypt",
