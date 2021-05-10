@@ -22,7 +22,7 @@ struct vertex {
 };
 
 struct vertex_color {
-    vec2 pos;
+    vec3 pos;
     vec4 col;
 };
 
@@ -88,6 +88,9 @@ typedef struct Renderer {
     struct prim_line* lines;
     struct prim_rect* rects;
     uint32_t* rect_indices;
+    struct {
+        float prim_layer;
+    } prim_draw_state;
     ecs_query_t* q_sprites;
 } Renderer;
 
@@ -263,6 +266,7 @@ renderer_resources init_renderer_resources(
         .height = canvas_height,
         .min_filter = SG_FILTER_NEAREST,
         .mag_filter = SG_FILTER_NEAREST,
+        .pixel_format = SG_PIXELFORMAT_RGBA8,
     };
 
     resources.canvas.color_img = sg_make_image(&image_desc);
@@ -342,6 +346,7 @@ renderer_resources init_renderer_resources(
                 .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                 .src_factor_alpha = SG_BLENDFACTOR_ONE,
                 .dst_factor_alpha = SG_BLENDFACTOR_ZERO,
+                .color_format = SG_PIXELFORMAT_RGBA8,
             },
         .rasterizer.cull_mode = SG_CULLMODE_NONE,
     });
@@ -356,10 +361,9 @@ renderer_resources init_renderer_resources(
         .fs_images[0] = resources.atlas,
     };
 
-    resources.canvas.line_pip = sg_make_pipeline(&(sg_pipeline_desc){
+    // primitive pipelines share many similarities so create a base structure here
+    sg_pipeline_desc base_prim_pip = (sg_pipeline_desc){
         .shader = resources.canvas.prim_shader,
-        .index_type = SG_INDEXTYPE_NONE,
-        .primitive_type = SG_PRIMITIVETYPE_LINES,
         .layout =
             {
                 .buffers[0] = {.stride = sizeof(struct vertex_color)},
@@ -367,14 +371,14 @@ renderer_resources init_renderer_resources(
                     {
                         [0] =
                             {
-                                .format = SG_VERTEXFORMAT_FLOAT2,
+                                .format = SG_VERTEXFORMAT_FLOAT3,
                                 .offset = 0,
                                 .buffer_index = 0,
                             },
                         [1] =
                             {
                                 .format = SG_VERTEXFORMAT_FLOAT4,
-                                .offset = 8,
+                                .offset = 12,
                                 .buffer_index = 0,
                             },
                     },
@@ -382,7 +386,7 @@ renderer_resources init_renderer_resources(
         .depth_stencil =
             {
                 .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL,
-                .depth_write_enabled = false,
+                .depth_write_enabled = true,
             },
         .blend =
             {
@@ -393,54 +397,24 @@ renderer_resources init_renderer_resources(
                 .src_factor_alpha = SG_BLENDFACTOR_ONE,
                 .dst_factor_alpha = SG_BLENDFACTOR_ZERO,
             },
-    });
+    };
 
+    // Setup primtive line drawing pipeline and bindings
+    sg_pipeline_desc prim_line_pip = base_prim_pip;
+    prim_line_pip.primitive_type = SG_PRIMITIVETYPE_LINES;
+    prim_line_pip.index_type = SG_INDEXTYPE_NONE;
+
+    resources.canvas.line_pip = sg_make_pipeline(&prim_line_pip);
     resources.canvas.line_bindings = (sg_bindings){
         .vertex_buffers[0] = resources.line_vbuf,
     };
 
-    resources.canvas.rect_pip = sg_make_pipeline(&(sg_pipeline_desc){
-        .shader = resources.canvas.prim_shader,
-        .index_type = SG_INDEXTYPE_UINT32,
-        .layout =
-            {
-                .buffers =
-                    {
-                        [0] = {.stride = sizeof(struct vertex_color)},
-                    },
-                .attrs =
-                    {
-                        [0] =
-                            {
-                                .format = SG_VERTEXFORMAT_FLOAT2,
-                                .offset = 0,
-                                .buffer_index = 0,
-                            },
-                        [1] =
-                            {
-                                .format = SG_VERTEXFORMAT_FLOAT4,
-                                .offset = 8,
-                                .buffer_index = 0,
-                            },
-                    },
-            },
-        .depth_stencil =
-            {
-                .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL,
-                .depth_write_enabled = false,
-            },
-        .blend =
-            {
-                .enabled = true,
-                .depth_format = SG_PIXELFORMAT_DEPTH,
-                .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
-                .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                .src_factor_alpha = SG_BLENDFACTOR_ONE,
-                .dst_factor_alpha = SG_BLENDFACTOR_ZERO,
-            },
-        .rasterizer.cull_mode = SG_CULLMODE_NONE,
-    });
+    // Setup primitive rect drawing pipeline and bindings
+    sg_pipeline_desc prim_rect_pip = base_prim_pip;
+    prim_rect_pip.primitive_type = SG_PRIMITIVETYPE_TRIANGLES;
+    prim_rect_pip.index_type = SG_INDEXTYPE_UINT32;
 
+    resources.canvas.rect_pip = sg_make_pipeline(&prim_rect_pip);
     resources.canvas.rect_bindings = (sg_bindings){
         .vertex_buffers[0] = resources.rect_vbuf,
         .index_buffer = resources.rect_ibuf,
@@ -498,7 +472,7 @@ renderer_resources init_renderer_resources(
     };
 
     resources.screen.pass_action = (sg_pass_action){
-        .colors[0] = {.action = SG_ACTION_CLEAR, .val = {0.1f, 0.0f, 0.1f}},
+        .colors[0] = {.action = SG_ACTION_CLEAR, .val = {0.0f, 0.0f, 0.0f}},
     };
 
     return resources;
@@ -513,24 +487,25 @@ void draw_line_col2(vec2 from, vec2 to, vec4 col0, vec4 col1)
     ecs_iter_t it = ecs_query_iter(q_renderer);
     while (ecs_query_next(&it)) {
         Renderer* r = ecs_column(&it, Renderer, 1);
+
+        float layer = r->prim_draw_state.prim_layer;
         struct prim_line line = {
-            .v[0] = {.pos = from, .col = col0},
-            .v[1] = {.pos = to, .col = col1},
+            .v[0] = {.pos = (vec3){.x = from.x, .y = from.y, .z = layer}, .col = col0},
+            .v[1] = {.pos = (vec3){.x = to.x, .y = to.y, .z = layer}, .col = col1},
         };
 
-        for (int32_t i = 0; i < it.count; ++i) {
-            size_t prev_cap = arrcap(r[i].lines);
-            arrput(r[i].lines, line);
+        size_t prev_cap = arrcap(r->lines);
 
-            size_t cap = arrcap(r[i].lines);
-            if (cap > prev_cap) {
-                sg_destroy_buffer(r[i].resources.line_vbuf);
-                r[i].resources.line_vbuf = sg_make_buffer(&(sg_buffer_desc){
-                    .usage = SG_USAGE_STREAM,
-                    .size = (int)(sizeof(struct prim_line) * cap),
-                });
-                r[i].resources.canvas.line_bindings.vertex_buffers[0] = r[i].resources.line_vbuf;
-            }
+        arrput(r->lines, line);
+
+        size_t cap = arrcap(r->lines);
+        if (cap > prev_cap) {
+            sg_destroy_buffer(r->resources.line_vbuf);
+            r->resources.line_vbuf = sg_make_buffer(&(sg_buffer_desc){
+                .usage = SG_USAGE_STREAM,
+                .size = (int)(sizeof(struct prim_line) * cap),
+            });
+            r->resources.canvas.line_bindings.vertex_buffers[0] = r->resources.line_vbuf;
         }
     }
 }
@@ -557,44 +532,40 @@ void draw_rect_col4(vec2 p0, vec2 p1, vec4 cols[4])
     while (ecs_query_next(&it)) {
         Renderer* r = ecs_column(&it, Renderer, 1);
 
-        for (int32_t i = 0; i < it.count; ++i) {
-            size_t prev_cap = arrcap(r[i].rects);
+        float layer = r->prim_draw_state.prim_layer;
+        struct prim_rect rect = {
+            .v[0] = {.pos = (vec3){.x = p0.x, .y = p0.y, .z = layer}, .col = cols[0]},
+            .v[1] = {.pos = (vec3){.x = p1.x, .y = p0.y, .z = layer}, .col = cols[1]},
+            .v[2] = {.pos = (vec3){.x = p1.x, .y = p1.y, .z = layer}, .col = cols[2]},
+            .v[3] = {.pos = (vec3){.x = p0.x, .y = p1.y, .z = layer}, .col = cols[3]},
+        };
 
-            uint32_t base_idx = (uint32_t)(arrlen(r[i].rect_indices) / 6) * 4;
+        size_t prev_cap = arrcap(r->rects);
 
-            arrput(
-                r[i].rects,
-                ((struct prim_rect){
-                    .v =
-                        {
-                            [0] = {.pos = p0, .col = cols[0]},
-                            [1] = {.pos = (vec2){.x = p1.x, .y = p0.y}, .col = cols[1]},
-                            [2] = {.pos = p1, .col = cols[2]},
-                            [3] = {.pos = (vec2){.x = p0.x, .y = p1.y}, .col = cols[3]},
-                        },
-                }));
+        uint32_t base_idx = (uint32_t)(arrlen(r->rect_indices) / 6) * 4;
 
-            for (int32_t j = 0; j < 6; ++j) {
-                arrput(r[i].rect_indices, base_idx + index_offsets[j]);
-            }
+        arrput(r->rects, rect);
 
-            size_t cap = arrcap(r[i].rects);
-            if (cap > prev_cap) {
-                sg_destroy_buffer(r[i].resources.rect_vbuf);
-                sg_destroy_buffer(r[i].resources.rect_ibuf);
+        for (int32_t j = 0; j < 6; ++j) {
+            arrput(r->rect_indices, base_idx + index_offsets[j]);
+        }
 
-                r[i].resources.rect_vbuf = sg_make_buffer(&(sg_buffer_desc){
-                    .usage = SG_USAGE_STREAM,
-                    .size = (int)(sizeof(struct prim_rect) * cap),
-                });
-                r[i].resources.rect_ibuf = sg_make_buffer(&(sg_buffer_desc){
-                    .usage = SG_USAGE_STREAM,
-                    .size = (int)(sizeof(uint32_t) * 6 * cap),
-                });
+        size_t cap = arrcap(r->rects);
+        if (cap > prev_cap) {
+            sg_destroy_buffer(r->resources.rect_vbuf);
+            sg_destroy_buffer(r->resources.rect_ibuf);
 
-                r[i].resources.canvas.rect_bindings.vertex_buffers[0] = r[i].resources.rect_vbuf;
-                r[i].resources.canvas.rect_bindings.index_buffer = r[i].resources.rect_ibuf;
-            }
+            r->resources.rect_vbuf = sg_make_buffer(&(sg_buffer_desc){
+                .usage = SG_USAGE_STREAM,
+                .size = (int)(sizeof(struct prim_rect) * cap),
+            });
+            r->resources.rect_ibuf = sg_make_buffer(&(sg_buffer_desc){
+                .usage = SG_USAGE_STREAM,
+                .size = (int)(sizeof(uint32_t) * 6 * cap),
+            });
+
+            r->resources.canvas.rect_bindings.vertex_buffers[0] = r->resources.rect_vbuf;
+            r->resources.canvas.rect_bindings.index_buffer = r->resources.rect_ibuf;
         }
     }
 }
@@ -615,6 +586,24 @@ void draw_hgrad(vec2 p0, vec2 p1, vec4 left, vec4 right)
 {
     vec4 cols[4] = {left, right, left, right};
     draw_rect_col4(p0, p1, cols);
+}
+
+void draw_set_prim_layer(float layer)
+{
+    if (!q_renderer) {
+        return;
+    }
+
+    ecs_iter_t it = ecs_query_iter(q_renderer);
+    while (ecs_query_next(&it)) {
+        Renderer* r = ecs_column(&it, Renderer, 1);
+        r->prim_draw_state.prim_layer = layer;
+    }
+}
+
+void draw_reset_prim_layer()
+{
+    draw_set_prim_layer(0.0f);
 }
 
 void AttachRenderer(ecs_iter_t* it)
@@ -658,9 +647,8 @@ void AttachRenderer(ecs_iter_t* it)
             "game.comp.Position, ANY:sprite.renderer.Sprite, "
             "?sprite.renderer.SpriteFlags, ?sprite.renderer.SpriteSize");
 
-        ecs_set(
+        ecs_singleton_set(
             world,
-            it->entities[i],
             Renderer,
             {
                 .resources = resources,
@@ -674,6 +662,10 @@ void AttachRenderer(ecs_iter_t* it)
                 .canvas_width = config[i].canvas_width,
                 .canvas_height = config[i].canvas_height,
                 .q_sprites = q_sprites,
+                .prim_draw_state =
+                    {
+                        .prim_layer = 0,
+                    },
             });
     }
 }
@@ -698,12 +690,9 @@ void DetachRenderer(ecs_iter_t* it)
 void RendererNewFrame(ecs_iter_t* it)
 {
     Renderer* r = ecs_column(it, Renderer, 1);
-
-    for (int32_t i = 0; i < it->count; ++i) {
-        arrsetlen(r[i].lines, 0);
-        arrsetlen(r[i].rects, 0);
-        arrsetlen(r[i].rect_indices, 0);
-    }
+    arrsetlen(r->lines, 0);
+    arrsetlen(r->rects, 0);
+    arrsetlen(r->rect_indices, 0);
 }
 
 void UpdateBuffers(ecs_iter_t* it)
@@ -803,37 +792,45 @@ void Render(ecs_iter_t* it)
         mat4 projection = mat4_ortho(0, view_width, view_height, 0, 0.0f, 250.0f);
         mat4 view_proj = mat4_mul(projection, view);
 
+        // The first pass is the canvas pass which writes to the low resolution render target
         sg_begin_pass(
             r[i].resources.canvas.pass,
             &(sg_pass_action){
                 .colors[0] =
                     {
                         .action = SG_ACTION_CLEAR,
-                        .val = {0.0f, 0.0f, 0.0f, 1.0f},
+                        // .val = {0.392f, 0.584f, 0.929f, 1.0f},
+                        .val = {0.1f, 0.1f, 0.1f, 1.0f},
                     },
             });
 
+        // same uniforms across all canvas renders
         uniform_block uniforms = {.view_proj = view_proj};
-        sg_apply_pipeline(r[i].resources.canvas.pip);
-        sg_apply_bindings(&r[i].resources.canvas.bindings);
-        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniform_block));
-        sg_draw(0, 6, (int)arrlen(r[i].sprites));
 
+        // primtive rects
         sg_apply_pipeline(r[i].resources.canvas.rect_pip);
         sg_apply_bindings(&r[i].resources.canvas.rect_bindings);
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniform_block));
         int rect_idx_ct = (int)arrlen(r[i].rect_indices);
         int rect_ct = (int)arrlen(r[i].rects);
-        sg_draw(0, 6, 1);
+        sg_draw(0, rect_idx_ct, rect_ct);
 
+        // primitive lines
         sg_apply_pipeline(r[i].resources.canvas.line_pip);
         sg_apply_bindings(&r[i].resources.canvas.line_bindings);
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniform_block));
         int line_elems = (int)arrlen(r[i].lines);
         sg_draw(0, line_elems * 2, line_elems);
 
+        // sprites
+        sg_apply_pipeline(r[i].resources.canvas.pip);
+        sg_apply_bindings(&r[i].resources.canvas.bindings);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniform_block));
+        sg_draw(0, 6, (int)arrlen(r[i].sprites));
+
         sg_end_pass();
 
+        // Render the canvas to the full screen window on a fullscreen quad
         sg_begin_default_pass(&r[i].resources.screen.pass_action, width, height);
         sg_apply_pipeline(r[i].resources.screen.pip);
         sg_apply_bindings(&r[i].resources.screen.bindings);
@@ -876,7 +873,7 @@ void SpriteRendererImport(ecs_world_t* world)
     ECS_SYSTEM(world, Render, EcsPostFrame, Renderer);
     // clang-format on
 
-    q_renderer = ecs_query_new(world, "sprite.renderer.Renderer");
+    q_renderer = ecs_query_new(world, "$sprite.renderer.Renderer");
 
     ECS_EXPORT_COMPONENT(Sprite);
     ECS_EXPORT_COMPONENT(SpriteFlags);

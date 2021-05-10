@@ -14,6 +14,9 @@ void draw_rect_col(vec2 p0, vec2 p1, vec4 col);
 void draw_vgrad(vec2 p0, vec2 p1, vec4 top, vec4 bot);
 void draw_hgrad(vec2 p0, vec2 p1, vec4 left, vec4 right);
 
+void draw_set_prim_layer(float layer);
+void draw_reset_prim_layer();
+
 typedef enum sprite_flags {
     SpriteFlags_None = 0,
     SpriteFlags_FlipX = 1,
