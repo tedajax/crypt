@@ -167,7 +167,7 @@ renderer_resources init_renderer_resources(
         {.pos = {.x = 0, .y = k_size}, .uv = {.x = 0.0f, .y = 1.0f}},
     };
 
-    const uint16_t quad_indices[] = {0, 3, 2, 0, 2, 1};
+    const uint16_t quad_indices[] = {0, 2, 3, 0, 1, 2};
 
     resources.geom_vbuf = sg_make_buffer(&(sg_buffer_desc){
         .content = quad_verts,
@@ -350,7 +350,7 @@ renderer_resources init_renderer_resources(
                 .dst_factor_alpha = SG_BLENDFACTOR_ZERO,
                 .color_format = SG_PIXELFORMAT_RGBA8,
             },
-        .rasterizer.cull_mode = SG_CULLMODE_NONE,
+        .rasterizer.cull_mode = SG_CULLMODE_BACK,
     });
 
     resources.canvas.bindings = (sg_bindings){
@@ -399,7 +399,7 @@ renderer_resources init_renderer_resources(
                 .src_factor_alpha = SG_BLENDFACTOR_ONE,
                 .dst_factor_alpha = SG_BLENDFACTOR_ZERO,
             },
-        .rasterizer.cull_mode = SG_CULLMODE_NONE,
+        .rasterizer.cull_mode = SG_CULLMODE_BACK,
     };
 
     // Setup primtive line drawing pipeline and bindings
@@ -789,8 +789,10 @@ void Render(ecs_iter_t* it)
     SDL_GL_GetDrawableSize(r->sdl_window, &width, &height);
 
     const float aspect = (float)r->canvas_width / r->canvas_height;
-    float view_width = r->canvas_width / r->pixels_per_meter;
-    float view_height = r->canvas_height / r->pixels_per_meter;
+    const float view_width = r->canvas_width / r->pixels_per_meter;
+    const float view_height = r->canvas_height / r->pixels_per_meter;
+    const float view_half_width = view_width / 2;
+    const float view_half_height = view_height / 2;
 
     static float cam_x = 0.0f;
     static float cam_y = 0.0f;
@@ -801,11 +803,10 @@ void Render(ecs_iter_t* it)
     if (txinp_get_key(TXINP_KEY_W)) cam_y -= 10.0f * it->delta_time;
     if (txinp_get_key(TXINP_KEY_S)) cam_y += 10.0f * it->delta_time;
 
-    if (txinp_get_key_down(TXINP_KEY_F)) cam_look_z = -cam_look_z;
-
     mat4 view =
         mat4_look_at((vec3){cam_x, cam_y, 0}, (vec3){cam_x, cam_y, cam_look_z}, (vec3){0, 1, 0});
-    mat4 projection = mat4_ortho(0, view_width, view_height, 0, 0.0f, 1000.0f);
+    mat4 projection = mat4_ortho(
+        -view_half_width, view_half_width, view_half_height, -view_half_height, 0.0f, 1000.0f);
     mat4 view_proj = mat4_mul(projection, view);
 
     // The first pass is the canvas pass which writes to the low resolution render target

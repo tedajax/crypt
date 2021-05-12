@@ -55,13 +55,19 @@ static void Sdl2CreateWindow(ecs_iter_t* it)
         const char* title = (window_desc[i].title) ? window_desc[i].title : "SDL2 Window";
 
         {
+            uint32_t flags = SDL_WINDOW_OPENGL;
+
+            if (window_desc->fullscreen) {
+                flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+            }
+
             SDL_Window* window_ptr = SDL_CreateWindow(
                 title,
                 SDL_WINDOWPOS_CENTERED,
                 SDL_WINDOWPOS_CENTERED,
                 window_desc->width,
                 window_desc->height,
-                SDL_WINDOW_OPENGL);
+                flags);
 
             if (!window_ptr) {
                 ecs_err("SDL2 window creation failed: %s", SDL_GetError());

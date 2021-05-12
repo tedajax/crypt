@@ -74,7 +74,7 @@ int main(int argc, char* argv[])
 
     ECS_ENTITY(
         world, Tank, game.comp.Position, game.comp.Velocity, TankInput, sprite.renderer.Sprite);
-    ecs_set(world, Tank, Position, {.x = 15.0f, .y = 17.0f});
+    ecs_set(world, Tank, Position, {.x = 0.0f, .y = 8.0f});
     ecs_set(world, Tank, Velocity, {.x = 0.0f, .y = 0.0f});
     ecs_set(world, Tank, TankInput, {0});
     ecs_set(world, Tank, Sprite, {.sprite_id = 0});
@@ -83,20 +83,12 @@ int main(int argc, char* argv[])
     ECS_PREFAB(world, InvaderPrefab, sprite.renderer.Sprite);
     ecs_set(world, InvaderPrefab, Sprite, {.sprite_id = 2});
 
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 2500; ++i) {
         ecs_entity_t invader = ecs_new_w_pair(world, EcsIsA, InvaderPrefab);
-        ecs_set(
-            world,
-            invader,
-            Position,
-            {.x = txrng_rangef(0.0f, 32.0f), .y = txrng_rangef(0.0f, 12.0f)});
+        ecs_set(world, invader, Position, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-6, 6)});
         ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
-        ecs_set(
-            world,
-            invader,
-            Target,
-            {.x = txrng_rangef(0.0f, 32.0f), .y = txrng_rangef(0.0f, 12.0f)});
-        ecs_set(world, invader, SpriteLayer, {.layer = 50.0f});
+        ecs_set(world, invader, Target, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 9)});
+        ecs_set(world, invader, SpriteLayer, {.layer = 2.0f});
     }
 
     ECS_PREFAB(world, TankProjectile, Projectile);
@@ -114,16 +106,21 @@ void InvaderMovement(ecs_iter_t* it)
     Target* target = ecs_column(it, Target, 3);
 
     draw_set_prim_layer(10.0f);
-    draw_line_col((vec2){0, 0}, (vec2){32, 16}, (vec4){1, 0, 0, 1});
-    draw_rect_col((vec2){5, 5}, (vec2){18, 12}, (vec4){1, 1, 0, 0.5f});
+    draw_line_col((vec2){-15, -8}, (vec2){15, 8}, (vec4){1, 0, 0, 1});
+    draw_set_prim_layer(5.0f);
+    draw_rect_col((vec2){-5, -5}, (vec2){5, 5}, (vec4){1, 1, 0, 1});
+    draw_set_prim_layer(0.0f);
+    draw_rect_col((vec2){-2, -3}, (vec2){3, 2}, (vec4){1, 0, 1, 1});
 
     for (int i = 0; i < it->count; ++i) {
         vec2 delta = vec2_sub(target[i], position[i]);
         vec2 normDir = vec2_norm(delta);
+        float dist = vec2_len(delta);
         float accel = 10.0f;
+
         if (vec2_len(velocity[i]) > 0.0f) {
             vec2 normVel = vec2_norm(velocity[i]);
-            if (vec2_dot(normDir, normVel) < 0.0f && vec2_len(delta) < 1.0f) {
+            if (vec2_dot(normDir, normVel) < 0.0f && dist > 1.0f) {
                 accel *= 2.0f;
             }
         }
@@ -132,6 +129,7 @@ void InvaderMovement(ecs_iter_t* it)
         if (vec2_len(vel) > 25.0f) {
             vel = vec2_scale(vec2_norm(vel), 25.0f);
         }
+
         velocity[i] = vel;
         position[i] = vec2_add(position[i], vec2_scale(velocity[i], it->delta_time));
     }
