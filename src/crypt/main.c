@@ -65,7 +65,7 @@ int main(int argc, char* argv[])
 
     ECS_TAG(world, Projectile);
 
-    ECS_SYSTEM(world, TankGatherInput, EcsPreUpdate, TankInput);
+    ECS_SYSTEM(world, TankGatherInput, EcsPostLoad, TankInput);
     ECS_SYSTEM(world, TankMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, TankInput);
     ECS_SYSTEM(world, InvaderMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, Target);
     ECS_SYSTEM(
@@ -96,18 +96,10 @@ int main(int argc, char* argv[])
             invader,
             Target,
             {.x = txrng_rangef(0.0f, 32.0f), .y = txrng_rangef(0.0f, 12.0f)});
+        ecs_set(world, invader, SpriteLayer, {.layer = 50.0f});
     }
 
     ECS_PREFAB(world, TankProjectile, Projectile);
-    ecs_add(world, TankProjectile, Projectile);
-    ecs_set(world, TankProjectile, EcsName, {"TankProjectilePrefab"});
-
-    ECS_ENTITY(
-        world, Shot, game.comp.Position, game.comp.Velocity, Collider, ExpireAfter, Projectile);
-    ecs_set(world, Shot, Position, {.x = 15.0f, .y = 17.0f});
-    ecs_set(world, Shot, Velocity, {.x = 0.0f, .y = -4.0f});
-    ecs_set(world, Shot, Collider, {.half_extents = {.x = 1.0f, .y = 1.0f}});
-    ecs_set(world, Shot, ExpireAfter, {.seconds = 2});
 
     while (ecs_progress(world, 0.0f)) {
     }
@@ -120,6 +112,10 @@ void InvaderMovement(ecs_iter_t* it)
     Position* position = ecs_column(it, Position, 1);
     Velocity* velocity = ecs_column(it, Velocity, 2);
     Target* target = ecs_column(it, Target, 3);
+
+    draw_set_prim_layer(10.0f);
+    draw_line_col((vec2){0, 0}, (vec2){32, 16}, (vec4){1, 0, 0, 1});
+    draw_rect_col((vec2){5, 5}, (vec2){18, 12}, (vec4){1, 1, 0, 0.5f});
 
     for (int i = 0; i < it->count; ++i) {
         vec2 delta = vec2_sub(target[i], position[i]);
@@ -166,14 +162,15 @@ void TankMovement(ecs_iter_t* it)
     // ECS_COMPONENT(it->world, Velocity);
     // ECS_COMPONENT(it->world, Collider);
     // ECS_COMPONENT(it->world, ExpireAfter);
+    // ECS_TAG(it->world, Projectile);
 
-    // ecs_entity_t prefab = ecs_lookup(it->world, "TankProjectilePrefab");
+    // ECS_PREFAB(it->world, TankProjectile, Projectile);
 
     for (int32_t i = 0; i < it->count; ++i) {
         position[i].x += input[i].move * 32.0f * it->delta_time;
 
         if (input[i].fire) {
-            // ecs_entity_t projectile = ecs_new_w_pair(it->world, EcsIsA, prefab);
+            // ecs_entity_t projectile = ecs_new_w_pair(it->world, EcsIsA, TankProjectile);
             // ecs_set(it->world, projectile, Position, {.x = position[i].x, .y = position[i].y});
             // ecs_set(it->world, projectile, Velocity, {.x = 0.0f, .y = -64.0f});
             // ecs_set(it->world, projectile, Collider, {.half_extents = {.x = 1.0f, .y = 1.0f}});

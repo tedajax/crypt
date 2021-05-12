@@ -36,6 +36,10 @@ typedef struct SpriteSize {
     uint8_t height;
 } SpriteSize;
 
+typedef struct SpriteLayer {
+    float layer;
+} SpriteLayer;
+
 typedef struct SpriteRenderConfig {
     float pixels_per_meter;
     uint32_t canvas_width;
@@ -47,6 +51,7 @@ typedef struct SpriteRenderer {
     ECS_DECLARE_COMPONENT(Sprite);
     ECS_DECLARE_COMPONENT(SpriteFlags);
     ECS_DECLARE_COMPONENT(SpriteSize);
+    ECS_DECLARE_COMPONENT(SpriteLayer);
     ECS_DECLARE_COMPONENT(SpriteRenderConfig);
 } SpriteRenderer;
 
@@ -56,4 +61,5 @@ void SpriteRendererImport(ecs_world_t* world);
     ECS_IMPORT_COMPONENT(handles, Sprite);                                                         \
     ECS_IMPORT_COMPONENT(handles, SpriteFlags);                                                    \
     ECS_IMPORT_COMPONENT(handles, SpriteSize);                                                     \
+    ECS_IMPORT_COMPONENT(handles, SpriteLayer);                                                    \
     ECS_IMPORT_COMPONENT(handles, SpriteRenderConfig);

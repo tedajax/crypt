@@ -10,6 +10,8 @@ void sdl2_fini(ecs_world_t* world, void* ctx)
 
 static void Sdl2ProcessEvents(ecs_iter_t* it)
 {
+    txinp_update();
+
     for (int i = 0; i < it->count; ++i) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -95,7 +97,7 @@ void SystemSdl2Import(ecs_world_t* world)
 
     ECS_TAG(world, Sdl2Input);
 
-    ECS_SYSTEM(world, Sdl2ProcessEvents, EcsPostLoad, Sdl2Input);
+    ECS_SYSTEM(world, Sdl2ProcessEvents, EcsOnLoad, Sdl2Input);
 
     ECS_ENTITY(world, Sdl2, Sdl2Input);
 
