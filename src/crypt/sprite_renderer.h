@@ -14,6 +14,9 @@ void draw_rect_col(vec2 p0, vec2 p1, vec4 col);
 void draw_vgrad(vec2 p0, vec2 p1, vec4 top, vec4 bot);
 void draw_hgrad(vec2 p0, vec2 p1, vec4 left, vec4 right);
 
+void draw_line_rect_col4(vec2 p0, vec2 p1, vec4 cols[4]);
+void draw_line_rect_col(vec2 p0, vec2 p1, vec4 col);
+
 void draw_set_prim_layer(float layer);
 void draw_reset_prim_layer();
 
@@ -24,8 +27,9 @@ typedef enum sprite_flags {
 } sprite_flags;
 
 typedef struct Sprite {
-    uint16_t sprite_id;
+    vec2 origin;
     float layer;
+    uint16_t sprite_id;
 } Sprite;
 
 typedef struct SpriteFlags {

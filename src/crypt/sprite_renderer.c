@@ -601,6 +601,23 @@ void draw_hgrad(vec2 p0, vec2 p1, vec4 left, vec4 right)
     draw_rect_col4(p0, p1, cols);
 }
 
+void draw_line_rect_col4(vec2 p0, vec2 p1, vec4 cols[4])
+{
+    vec2 tr = (vec2){.x = p1.x, .y = p0.y};
+    vec2 bl = (vec2){.x = p0.x, .y = p1.y};
+
+    draw_line_col2(p0, tr, cols[0], cols[1]);
+    draw_line_col2(tr, p1, cols[1], cols[2]);
+    draw_line_col2(p0, bl, cols[0], cols[3]);
+    draw_line_col2(bl, p1, cols[3], cols[2]);
+}
+
+void draw_line_rect_col(vec2 p0, vec2 p1, vec4 col)
+{
+    vec4 cols[4] = {col, col, col, col};
+    draw_line_rect_col4(p0, p1, cols);
+}
+
 void draw_set_prim_layer(float layer)
 {
     Renderer* r = try_get_r();
@@ -732,12 +749,15 @@ void UpdateBuffers(ecs_iter_t* it)
         for (int32_t i = 0; i < qit.count; ++i) {
             uint32_t sprite_id;
             float layer;
+            vec2 origin;
             if (ecs_is_owned(&qit, 2)) {
                 sprite_id = spr[i].sprite_id;
                 layer = spr[i].layer;
+                origin = spr[i].origin;
             } else {
                 sprite_id = spr->sprite_id;
                 layer = spr->layer;
+                origin = spr->origin;
             }
             uint16_t flags = SpriteFlags_None;
             if (spr_flags) {
@@ -756,7 +776,7 @@ void UpdateBuffers(ecs_iter_t* it)
                     .pos = position,
                     .rect = spr_calc_rect(sprite_id, flags, swidth, sheight),
                     .scale = {.x = (float)swidth, .y = (float)sheight},
-                    .origin = {.x = 0.0f, .y = 0.0f},
+                    .origin = origin,
                 }));
         }
     }

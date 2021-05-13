@@ -13,8 +13,7 @@ out vec2 uv;
 void main()
 {
     uv = texcoord0 * spr_rect.zw + spr_rect.xy;
-    // vec2 origin = clamp(spr_origin, vec2(0, 0), vec2(1, 1)) * inst_scale;
-    vec2 origin = vec2(0.0, 0.0);
+    vec2 origin = spr_origin * inst_scale;
     vec2 vert_pos = position * inst_scale;
 
     vec3 pos = vec3(vert_pos + inst_pos.xy - origin, inst_pos.z);

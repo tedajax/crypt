@@ -18,6 +18,7 @@ typedef struct TankInput {
 typedef struct Collider {
     vec2 offset;
     vec2 half_extents;
+    uint8_t layer; // TEMP
 } Collider;
 
 typedef struct ExpireAfter {
@@ -32,6 +33,7 @@ void TankMovement(ecs_iter_t* it);
 void ProjectileMovement(ecs_iter_t* it);
 void ProjectileView(ecs_iter_t* it);
 void ExpireAfterUpdate(ecs_iter_t* it);
+void ColliderView(ecs_iter_t* it);
 
 ECS_DECLARE_ENTITY(TankProjectilePrefab);
 
@@ -73,30 +75,44 @@ int main(int argc, char* argv[])
 
     ECS_TAG_DEFINE(world, Projectile);
 
+    // clang-format off
     ECS_SYSTEM(world, TankGatherInput, EcsPostLoad, TankInput);
     ECS_SYSTEM(world, TankMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, TankInput);
     ECS_SYSTEM(world, InvaderMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, Target);
     ECS_SYSTEM(
-        world, ProjectileMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, Collider);
+        world,
+        ProjectileMovement,
+        EcsOnUpdate,
+        game.comp.Position,
+        game.comp.Velocity,
+        Collider,
+        Projectile);
+    ECS_SYSTEM(world, ColliderView, EcsPostUpdate, game.comp.Position, ANY:Collider);
     ECS_SYSTEM(world, ProjectileView, EcsOnUpdate, Projectile);
     ECS_SYSTEM(world, ExpireAfterUpdate, EcsOnUpdate, ExpireAfter);
+    // clang-format on
 
     ECS_ENTITY(
         world, Tank, game.comp.Position, game.comp.Velocity, TankInput, sprite.renderer.Sprite);
-    ecs_set(world, Tank, Position, {.x = 0.0f, .y = 8.0f});
+    ecs_set(world, Tank, Position, {.x = 0.0f, .y = 9.0f});
     ecs_set(world, Tank, Velocity, {.x = 0.0f, .y = 0.0f});
     ecs_set(world, Tank, TankInput, {0});
-    ecs_set(world, Tank, Sprite, {.sprite_id = 0, .layer = 1.0f});
+    ecs_set(world, Tank, Sprite, {.sprite_id = 0, .layer = 1.0f, .origin = (vec2){0.5f, 1.0f}});
     ecs_set(world, Tank, SpriteSize, {.width = 2, .height = 1});
 
-    ECS_PREFAB(world, InvaderPrefab, sprite.renderer.Sprite);
-    ecs_set(world, InvaderPrefab, Sprite, {.sprite_id = 2, .layer = 2.0f});
+    ECS_PREFAB(world, InvaderPrefab, sprite.renderer.Sprite, Collider);
+    ecs_set(
+        world,
+        InvaderPrefab,
+        Sprite,
+        {.sprite_id = 2, .layer = 2.0f, .origin = (vec2){0.5f, 0.5f}});
+    ecs_set(world, InvaderPrefab, Collider, {.half_extents = {.x = 0.5f, .y = 0.5f}, .layer = 1});
 
-    for (int i = 0; i < 2500; ++i) {
+    for (int i = 0; i < 25; ++i) {
         ecs_entity_t invader = ecs_new_w_pair(world, EcsIsA, InvaderPrefab);
-        ecs_set(world, invader, Position, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-6, 6)});
+        ecs_set(world, invader, Position, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 6)});
         ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
-        ecs_set(world, invader, Target, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 9)});
+        ecs_set(world, invader, Target, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 6)});
     }
 
     ECS_PREFAB(world, TankProjectilePrefab, Projectile);
@@ -172,10 +188,11 @@ void TankMovement(ecs_iter_t* it)
 
         if (input[i].fire) {
             ecs_entity_t projectile = ecs_new(it->world, Projectile);
-            ecs_set(it->world, projectile, Position, {.x = position[i].x, .y = position[i].y});
-            ecs_set(it->world, projectile, Velocity, {.x = 0.0f, .y = -64.0f});
-            ecs_set(it->world, projectile, Collider, {.half_extents = {.x = 1.0f, .y = 1.0f}});
-            ecs_set(it->world, projectile, ExpireAfter, {.seconds = 4.0f});
+            ecs_set(
+                it->world, projectile, Position, {.x = position[i].x, .y = position[i].y - 1.0f});
+            ecs_set(it->world, projectile, Velocity, {.x = 0.0f, .y = -32.0f});
+            ecs_set(it->world, projectile, Collider, {.half_extents = {.x = 0.125f, .y = 0.25f}});
+            ecs_set(it->world, projectile, ExpireAfter, {.seconds = 1.0f});
         }
     }
 }
@@ -184,16 +201,38 @@ void ProjectileMovement(ecs_iter_t* it)
 {
     Position* position = ecs_column(it, Position, 1);
     Velocity* velocity = ecs_column(it, Velocity, 2);
-    Collider* collider = ecs_column(it, Collider, 3);
 
     for (int32_t i = 0; i < it->count; ++i) {
         vec2 vel = vec2_scale(velocity[i], it->delta_time);
         position[i] = vec2_add(position[i], vel);
+    }
+}
 
-        vec2 p0 = vec2_sub(position[i], collider->half_extents);
-        vec2 p1 = vec2_add(position[i], collider->half_extents);
+void ColliderView(ecs_iter_t* it)
+{
+    Position* position = ecs_column(it, Position, 1);
+    Collider* collider = ecs_column(it, Collider, 2);
 
-        draw_rect_col(p0, p1, (vec4){0.0f, 1.0f, 1.0f, 1.0f});
+    vec4 cols[2] = {
+        (vec4){0.0f, 1.0f, 1.0f, 1.0f},
+        (vec4){1.0f, 0.0f, 1.0f, 1.0f},
+    };
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        vec2 half_extents;
+        int8_t coll_layer;
+        if (ecs_is_owned(it, 2)) {
+            half_extents = collider[i].half_extents;
+            coll_layer = collider[i].layer;
+        } else {
+            half_extents = collider->half_extents;
+            coll_layer = collider->layer;
+        }
+
+        vec2 p0 = vec2_sub(position[i], half_extents);
+        vec2 p1 = vec2_add(position[i], half_extents);
+
+        draw_line_rect_col(p0, p1, cols[coll_layer]);
     }
 }
 
