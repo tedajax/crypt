@@ -30,7 +30,15 @@ void InvaderMovement(ecs_iter_t* it);
 void TankGatherInput(ecs_iter_t* it);
 void TankMovement(ecs_iter_t* it);
 void ProjectileMovement(ecs_iter_t* it);
+void ProjectileView(ecs_iter_t* it);
 void ExpireAfterUpdate(ecs_iter_t* it);
+
+ECS_DECLARE_ENTITY(TankProjectilePrefab);
+
+ECS_COMPONENT_DECLARE(Collider);
+ECS_COMPONENT_DECLARE(ExpireAfter);
+
+ECS_TAG_DECLARE(Projectile);
 
 int main(int argc, char* argv[])
 {
@@ -60,16 +68,17 @@ int main(int argc, char* argv[])
 
     ECS_COMPONENT(world, Target);
     ECS_COMPONENT(world, TankInput);
-    ECS_COMPONENT(world, Collider);
-    ECS_COMPONENT(world, ExpireAfter);
+    ECS_COMPONENT_DEFINE(world, Collider);
+    ECS_COMPONENT_DEFINE(world, ExpireAfter);
 
-    ECS_TAG(world, Projectile);
+    ECS_TAG_DEFINE(world, Projectile);
 
     ECS_SYSTEM(world, TankGatherInput, EcsPostLoad, TankInput);
     ECS_SYSTEM(world, TankMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, TankInput);
     ECS_SYSTEM(world, InvaderMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, Target);
     ECS_SYSTEM(
         world, ProjectileMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, Collider);
+    ECS_SYSTEM(world, ProjectileView, EcsOnUpdate, Projectile);
     ECS_SYSTEM(world, ExpireAfterUpdate, EcsOnUpdate, ExpireAfter);
 
     ECS_ENTITY(
@@ -90,7 +99,7 @@ int main(int argc, char* argv[])
         ecs_set(world, invader, Target, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 9)});
     }
 
-    ECS_PREFAB(world, TankProjectile, Projectile);
+    ECS_PREFAB(world, TankProjectilePrefab, Projectile);
 
     while (ecs_progress(world, 0.0f)) {
     }
@@ -151,27 +160,22 @@ void TankGatherInput(ecs_iter_t* it)
 
 void TankMovement(ecs_iter_t* it)
 {
+    ECS_COLUMN_COMPONENT(it, Position, 1);
+    ECS_COLUMN_COMPONENT(it, Velocity, 2);
+
     Position* position = ecs_column(it, Position, 1);
     Velocity* velocity = ecs_column(it, Velocity, 2);
     TankInput* input = ecs_column(it, TankInput, 3);
-
-    // ECS_COMPONENT(it->world, Position);
-    // ECS_COMPONENT(it->world, Velocity);
-    // ECS_COMPONENT(it->world, Collider);
-    // ECS_COMPONENT(it->world, ExpireAfter);
-    // ECS_TAG(it->world, Projectile);
-
-    // ECS_PREFAB(it->world, TankProjectile, Projectile);
 
     for (int32_t i = 0; i < it->count; ++i) {
         position[i].x += input[i].move * 32.0f * it->delta_time;
 
         if (input[i].fire) {
-            // ecs_entity_t projectile = ecs_new_w_pair(it->world, EcsIsA, TankProjectile);
-            // ecs_set(it->world, projectile, Position, {.x = position[i].x, .y = position[i].y});
-            // ecs_set(it->world, projectile, Velocity, {.x = 0.0f, .y = -64.0f});
-            // ecs_set(it->world, projectile, Collider, {.half_extents = {.x = 1.0f, .y = 1.0f}});
-            // ecs_set(it->world, projectile, ExpireAfter, {.seconds = 4.0f});
+            ecs_entity_t projectile = ecs_new(it->world, Projectile);
+            ecs_set(it->world, projectile, Position, {.x = position[i].x, .y = position[i].y});
+            ecs_set(it->world, projectile, Velocity, {.x = 0.0f, .y = -64.0f});
+            ecs_set(it->world, projectile, Collider, {.half_extents = {.x = 1.0f, .y = 1.0f}});
+            ecs_set(it->world, projectile, ExpireAfter, {.seconds = 4.0f});
         }
     }
 }
@@ -193,16 +197,31 @@ void ProjectileMovement(ecs_iter_t* it)
     }
 }
 
+void ProjectileView(ecs_iter_t* it)
+{
+    vec4 cols[4];
+    for (int c = 0; c < 4; ++c) {
+        cols[c] = (vec4){.y = c / 4.0f, .z = 1.0f, .w = 1.0f};
+    }
+
+    vec2 base = (vec2){-16, -9};
+    vec2 size = (vec2){0.5f, 0.5f};
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        vec2 p0 = vec2_add(base, vec2_scale((vec2){0.5f, 0}, (float)i));
+        vec2 p1 = vec2_add(p0, size);
+        draw_rect_col4(p0, p1, cols);
+    }
+}
+
 void ExpireAfterUpdate(ecs_iter_t* it)
 {
     ExpireAfter* expire = ecs_column(it, ExpireAfter, 1);
 
-    ecs_defer_begin(it->world);
     for (int32_t i = 0; i < it->count; ++i) {
         expire[i].seconds -= it->delta_time;
         if (expire[i].seconds <= 0) {
             ecs_delete(it->world, it->entities[i]);
         }
     }
-    ecs_defer_end(it->world);
 }
