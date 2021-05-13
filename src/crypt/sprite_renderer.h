@@ -25,6 +25,7 @@ typedef enum sprite_flags {
 
 typedef struct Sprite {
     uint16_t sprite_id;
+    float layer;
 } Sprite;
 
 typedef struct SpriteFlags {
@@ -35,10 +36,6 @@ typedef struct SpriteSize {
     uint8_t width;
     uint8_t height;
 } SpriteSize;
-
-typedef struct SpriteLayer {
-    float layer;
-} SpriteLayer;
 
 typedef struct SpriteRenderConfig {
     float pixels_per_meter;
@@ -51,7 +48,6 @@ typedef struct SpriteRenderer {
     ECS_DECLARE_COMPONENT(Sprite);
     ECS_DECLARE_COMPONENT(SpriteFlags);
     ECS_DECLARE_COMPONENT(SpriteSize);
-    ECS_DECLARE_COMPONENT(SpriteLayer);
     ECS_DECLARE_COMPONENT(SpriteRenderConfig);
 } SpriteRenderer;
 
@@ -61,5 +57,4 @@ void SpriteRendererImport(ecs_world_t* world);
     ECS_IMPORT_COMPONENT(handles, Sprite);                                                         \
     ECS_IMPORT_COMPONENT(handles, SpriteFlags);                                                    \
     ECS_IMPORT_COMPONENT(handles, SpriteSize);                                                     \
-    ECS_IMPORT_COMPONENT(handles, SpriteLayer);                                                    \
     ECS_IMPORT_COMPONENT(handles, SpriteRenderConfig);

@@ -1,3 +1,5 @@
+//clang-format off
+
 #ifndef FLECS_IMPL
 #include "flecs.h"
 #endif
@@ -1586,6 +1588,7 @@ void _ecs_assert(
                 condition_str, file, line, ecs_strerror(error_code));
         }
 
+        __debugbreak();
         ecs_os_abort();
     }
 }
@@ -17142,16 +17145,22 @@ void build_sorted_table_range(
             ecs_entity_t base = ecs_find_entity_in_prefabs(
                 world, 0, table->type, component, 0);
             
-            /* If a base was not found, the query should not have allowed using
-             * the component for sorting */
-            ecs_assert(base != 0, ECS_INTERNAL_ERROR, NULL);
+            if (base == 0) {
+                helper[to_sort].ptr = NULL;
+                helper[to_sort].elem_size = 0;
+                helper[to_sort].shared = false;
+            } else {
+                /* If a base was not found, the query should not have allowed using
+                * the component for sorting */
+                ecs_assert(base != 0, ECS_INTERNAL_ERROR, NULL);
 
-            const EcsComponent *cptr = ecs_get(world, component, EcsComponent);
-            ecs_assert(cptr != NULL, ECS_INTERNAL_ERROR, NULL);
+                const EcsComponent *cptr = ecs_get(world, component, EcsComponent);
+                ecs_assert(cptr != NULL, ECS_INTERNAL_ERROR, NULL);
 
-            helper[to_sort].ptr = ecs_get_w_id(world, base, component);
-            helper[to_sort].elem_size = cptr->size;
-            helper[to_sort].shared = true;
+                helper[to_sort].ptr = ecs_get_w_id(world, base, component);
+                helper[to_sort].elem_size = cptr->size;
+                helper[to_sort].shared = true;
+            }
         } else {
             helper[to_sort].ptr = NULL;
             helper[to_sort].elem_size = 0;

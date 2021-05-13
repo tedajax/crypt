@@ -8,6 +8,8 @@
 #include <GL/gl3w.h>
 #include <SDL2/SDL.h>
 
+ECS_COMPONENT_DECLARE(Sprite);
+
 // private system structs
 struct sprite {
     vec3 pos;
@@ -613,6 +615,17 @@ void draw_reset_prim_layer()
     draw_set_prim_layer(0.0f);
 }
 
+int compare_sprite_layers(ecs_entity_t e1, const Sprite* s1, ecs_entity_t e2, const Sprite* s2)
+{
+    if (s1->layer == s2->layer) {
+        return 0;
+    } else if (s1->layer > s2->layer) {
+        return -1;
+    } else {
+        return 1;
+    }
+}
+
 void AttachRenderer(ecs_iter_t* it)
 {
     ecs_world_t* world = it->world;
@@ -652,8 +665,8 @@ void AttachRenderer(ecs_iter_t* it)
         ecs_query_t* q_sprites = ecs_query_new(
             world,
             "game.comp.Position, ANY:sprite.renderer.Sprite, "
-            "?sprite.renderer.SpriteFlags, ?sprite.renderer.SpriteSize, "
-            "?sprite.renderer.SpriteLayer");
+            "?sprite.renderer.SpriteFlags, ?sprite.renderer.SpriteSize");
+        ecs_query_order_by(world, q_sprites, ecs_typeid(Sprite), compare_sprite_layers);
 
         ecs_singleton_set(
             world,
@@ -715,14 +728,16 @@ void UpdateBuffers(ecs_iter_t* it)
         Sprite* spr = ecs_column(&qit, Sprite, 2);
         SpriteFlags* spr_flags = ecs_column(&qit, SpriteFlags, 3);
         SpriteSize* spr_size = ecs_column(&qit, SpriteSize, 4);
-        SpriteLayer* spr_layer = ecs_column(&qit, SpriteLayer, 5);
 
         for (int32_t i = 0; i < qit.count; ++i) {
             uint32_t sprite_id;
+            float layer;
             if (ecs_is_owned(&qit, 2)) {
                 sprite_id = spr[i].sprite_id;
+                layer = spr[i].layer;
             } else {
                 sprite_id = spr->sprite_id;
+                layer = spr->layer;
             }
             uint16_t flags = SpriteFlags_None;
             if (spr_flags) {
@@ -733,11 +748,7 @@ void UpdateBuffers(ecs_iter_t* it)
                 swidth = spr_size[i].width;
                 sheight = spr_size[i].height;
             }
-            float layer = 0.0f;
-            if (spr_layer) {
-                layer = -spr_layer[i].layer;
-            }
-            vec3 position = (vec3){.x = pos[i].x, .y = pos[i].y, .z = layer};
+            vec3 position = (vec3){.x = pos[i].x, .y = pos[i].y, .z = -layer};
 
             arrpush(
                 r->sprites,
@@ -871,10 +882,9 @@ void SpriteRendererImport(ecs_world_t* world)
 
     ECS_IMPORT(world, GameComp);
 
-    ECS_COMPONENT(world, Sprite);
+    ECS_COMPONENT_DEFINE(world, Sprite);
     ECS_COMPONENT(world, SpriteFlags);
     ECS_COMPONENT(world, SpriteSize);
-    ECS_COMPONENT(world, SpriteLayer);
     ECS_COMPONENT(world, SpriteRenderConfig);
 
     ECS_COMPONENT(world, Renderer);
@@ -895,6 +905,5 @@ void SpriteRendererImport(ecs_world_t* world)
     ECS_EXPORT_COMPONENT(Sprite);
     ECS_EXPORT_COMPONENT(SpriteFlags);
     ECS_EXPORT_COMPONENT(SpriteSize);
-    ECS_EXPORT_COMPONENT(SpriteLayer);
     ECS_EXPORT_COMPONENT(SpriteRenderConfig);
 }

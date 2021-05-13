@@ -77,18 +77,17 @@ int main(int argc, char* argv[])
     ecs_set(world, Tank, Position, {.x = 0.0f, .y = 8.0f});
     ecs_set(world, Tank, Velocity, {.x = 0.0f, .y = 0.0f});
     ecs_set(world, Tank, TankInput, {0});
-    ecs_set(world, Tank, Sprite, {.sprite_id = 0});
+    ecs_set(world, Tank, Sprite, {.sprite_id = 0, .layer = 1.0f});
     ecs_set(world, Tank, SpriteSize, {.width = 2, .height = 1});
 
     ECS_PREFAB(world, InvaderPrefab, sprite.renderer.Sprite);
-    ecs_set(world, InvaderPrefab, Sprite, {.sprite_id = 2});
+    ecs_set(world, InvaderPrefab, Sprite, {.sprite_id = 2, .layer = 2.0f});
 
     for (int i = 0; i < 2500; ++i) {
         ecs_entity_t invader = ecs_new_w_pair(world, EcsIsA, InvaderPrefab);
         ecs_set(world, invader, Position, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-6, 6)});
         ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
         ecs_set(world, invader, Target, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 9)});
-        ecs_set(world, invader, SpriteLayer, {.layer = 2.0f});
     }
 
     ECS_PREFAB(world, TankProjectile, Projectile);
