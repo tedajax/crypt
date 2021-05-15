@@ -125,9 +125,9 @@ int main(int argc, char* argv[])
 
 void InvaderMovement(ecs_iter_t* it)
 {
-    Position* position = ecs_column(it, Position, 1);
-    Velocity* velocity = ecs_column(it, Velocity, 2);
-    Target* target = ecs_column(it, Target, 3);
+    Position* position = ecs_term(it, Position, 1);
+    Velocity* velocity = ecs_term(it, Velocity, 2);
+    Target* target = ecs_term(it, Target, 3);
 
     draw_set_prim_layer(10.0f);
     draw_line_col((vec2){-15, -8}, (vec2){15, 8}, (vec4){1, 0, 0, 1});
@@ -161,7 +161,7 @@ void InvaderMovement(ecs_iter_t* it)
 
 void TankGatherInput(ecs_iter_t* it)
 {
-    TankInput* input = ecs_column(it, TankInput, 1);
+    TankInput* input = ecs_term(it, TankInput, 1);
 
     for (int32_t i = 0; i < it->count; ++i) {
         float move = 0.0f;
@@ -176,12 +176,12 @@ void TankGatherInput(ecs_iter_t* it)
 
 void TankMovement(ecs_iter_t* it)
 {
-    ECS_COLUMN_COMPONENT(it, Position, 1);
-    ECS_COLUMN_COMPONENT(it, Velocity, 2);
-
-    Position* position = ecs_column(it, Position, 1);
-    Velocity* velocity = ecs_column(it, Velocity, 2);
-    TankInput* input = ecs_column(it, TankInput, 3);
+    Position* position = ecs_term(it, Position, 1);
+    Velocity* velocity = ecs_term(it, Velocity, 2);
+    TankInput* input = ecs_term(it, TankInput, 3);
+    
+    ecs_id_t ecs_typeid(Position) = ecs_term_id(it, 1);
+    ecs_id_t ecs_typeid(Velocity) = ecs_term_id(it, 2);
 
     for (int32_t i = 0; i < it->count; ++i) {
         position[i].x += input[i].move * 32.0f * it->delta_time;
@@ -199,8 +199,8 @@ void TankMovement(ecs_iter_t* it)
 
 void ProjectileMovement(ecs_iter_t* it)
 {
-    Position* position = ecs_column(it, Position, 1);
-    Velocity* velocity = ecs_column(it, Velocity, 2);
+    Position* position = ecs_term(it, Position, 1);
+    Velocity* velocity = ecs_term(it, Velocity, 2);
 
     for (int32_t i = 0; i < it->count; ++i) {
         vec2 vel = vec2_scale(velocity[i], it->delta_time);
@@ -210,8 +210,8 @@ void ProjectileMovement(ecs_iter_t* it)
 
 void ColliderView(ecs_iter_t* it)
 {
-    Position* position = ecs_column(it, Position, 1);
-    Collider* collider = ecs_column(it, Collider, 2);
+    Position* position = ecs_term(it, Position, 1);
+    Collider* collider = ecs_term(it, Collider, 2);
 
     vec4 cols[2] = {
         (vec4){0.0f, 1.0f, 1.0f, 1.0f},
@@ -255,7 +255,7 @@ void ProjectileView(ecs_iter_t* it)
 
 void ExpireAfterUpdate(ecs_iter_t* it)
 {
-    ExpireAfter* expire = ecs_column(it, ExpireAfter, 1);
+    ExpireAfter* expire = ecs_term(it, ExpireAfter, 1);
 
     for (int32_t i = 0; i < it->count; ++i) {
         expire[i].seconds -= it->delta_time;

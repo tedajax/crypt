@@ -491,7 +491,7 @@ Renderer* try_get_r()
 
     ecs_iter_t it = ecs_query_iter(q_renderer);
     if (ecs_query_next(&it)) {
-        return ecs_column(&it, Renderer, 1);
+        return ecs_term(&it, Renderer, 1);
     }
 
     return NULL;
@@ -646,8 +646,8 @@ int compare_sprite_layers(ecs_entity_t e1, const Sprite* s1, ecs_entity_t e2, co
 void AttachRenderer(ecs_iter_t* it)
 {
     ecs_world_t* world = it->world;
-    SpriteRenderConfig* config = ecs_column(it, SpriteRenderConfig, 1);
-    ecs_entity_t ecs_typeid(Renderer) = ecs_column_entity(it, 2);
+    SpriteRenderConfig* config = ecs_term(it, SpriteRenderConfig, 1);
+    ecs_entity_t ecs_typeid(Renderer) = ecs_term_id(it, 2);
 
     ecs_entity_t ecs_typeid(Sdl2Window) = ecs_lookup_fullpath(world, "system.sdl2.Window");
 
@@ -710,7 +710,7 @@ void AttachRenderer(ecs_iter_t* it)
 
 void DetachRenderer(ecs_iter_t* it)
 {
-    Renderer* r = ecs_column(it, Renderer, 1);
+    Renderer* r = ecs_term(it, Renderer, 1);
 
     arrfree(r->sprites);
     arrfree(r->lines);
@@ -725,7 +725,7 @@ void DetachRenderer(ecs_iter_t* it)
 
 void RendererNewFrame(ecs_iter_t* it)
 {
-    Renderer* r = ecs_column(it, Renderer, 1);
+    Renderer* r = ecs_term(it, Renderer, 1);
     arrsetlen(r->lines, 0);
     arrsetlen(r->rects, 0);
     arrsetlen(r->rect_indices, 0);
@@ -733,7 +733,7 @@ void RendererNewFrame(ecs_iter_t* it)
 
 void UpdateBuffers(ecs_iter_t* it)
 {
-    Renderer* r = ecs_column(it, Renderer, 1);
+    Renderer* r = ecs_term(it, Renderer, 1);
 
     size_t prev_cap = arrcap(r->sprites);
     arrsetlen(r->sprites, 0);
@@ -741,10 +741,10 @@ void UpdateBuffers(ecs_iter_t* it)
     ecs_query_t* query = r->q_sprites;
     ecs_iter_t qit = ecs_query_iter(query);
     while (ecs_query_next(&qit)) {
-        Position* pos = ecs_column(&qit, Position, 1);
-        Sprite* spr = ecs_column(&qit, Sprite, 2);
-        SpriteFlags* spr_flags = ecs_column(&qit, SpriteFlags, 3);
-        SpriteSize* spr_size = ecs_column(&qit, SpriteSize, 4);
+        Position* pos = ecs_term(&qit, Position, 1);
+        Sprite* spr = ecs_term(&qit, Sprite, 2);
+        SpriteFlags* spr_flags = ecs_term(&qit, SpriteFlags, 3);
+        SpriteSize* spr_size = ecs_term(&qit, SpriteSize, 4);
 
         for (int32_t i = 0; i < qit.count; ++i) {
             uint32_t sprite_id;
@@ -814,7 +814,7 @@ void UpdateBuffers(ecs_iter_t* it)
 void Render(ecs_iter_t* it)
 {
     ecs_world_t* world = it->world;
-    Renderer* r = ecs_column(it, Renderer, 1);
+    Renderer* r = ecs_term(it, Renderer, 1);
 
     int width, height;
     SDL_GL_GetDrawableSize(r->sdl_window, &width, &height);

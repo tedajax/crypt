@@ -46,8 +46,8 @@ static void Sdl2ProcessEvents(ecs_iter_t* it)
 
 static void Sdl2CreateWindow(ecs_iter_t* it)
 {
-    WindowConfig* window_desc = ecs_column(it, WindowConfig, 1);
-    ecs_entity_t ecs_typeid(Sdl2Window) = ecs_column_entity(it, 2);
+    WindowConfig* window_desc = ecs_term(it, WindowConfig, 1);
+    ecs_entity_t ecs_typeid(Sdl2Window) = ecs_term_id(it, 2);
 
     for (int i = 0; i < it->count; ++i) {
         ecs_entity_t e = it->entities[i];
@@ -87,7 +87,7 @@ static void Sdl2CreateWindow(ecs_iter_t* it)
 
 static void Sdl2DestroyWindow(ecs_iter_t* it)
 {
-    Sdl2Window* window = ecs_column(it, Sdl2Window, 1);
+    Sdl2Window* window = ecs_term(it, Sdl2Window, 1);
 
     for (int i = 0; i < it->count; ++i) {
         SDL_DestroyWindow(window->window);
