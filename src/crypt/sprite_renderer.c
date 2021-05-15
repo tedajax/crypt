@@ -608,8 +608,8 @@ void draw_line_rect_col4(vec2 p0, vec2 p1, vec4 cols[4])
 
     draw_line_col2(p0, tr, cols[0], cols[1]);
     draw_line_col2(tr, p1, cols[1], cols[2]);
-    draw_line_col2(p0, bl, cols[0], cols[3]);
-    draw_line_col2(bl, p1, cols[3], cols[2]);
+    draw_line_col2(p1, bl, cols[2], cols[3]);
+    draw_line_col2(bl, p0, cols[3], cols[0]);
 }
 
 void draw_line_rect_col(vec2 p0, vec2 p1, vec4 col)
