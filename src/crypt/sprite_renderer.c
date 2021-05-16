@@ -746,38 +746,66 @@ void UpdateBuffers(ecs_iter_t* it)
         SpriteFlags* spr_flags = ecs_term(&qit, SpriteFlags, 3);
         SpriteSize* spr_size = ecs_term(&qit, SpriteSize, 4);
 
-        for (int32_t i = 0; i < qit.count; ++i) {
-            uint32_t sprite_id;
-            float layer;
-            vec2 origin;
-            if (ecs_is_owned(&qit, 2)) {
-                sprite_id = spr[i].sprite_id;
-                layer = spr[i].layer;
-                origin = spr[i].origin;
-            } else {
-                sprite_id = spr->sprite_id;
-                layer = spr->layer;
-                origin = spr->origin;
-            }
-            uint16_t flags = SpriteFlags_None;
-            if (spr_flags) {
-                flags = spr_flags[i].flags;
-            }
-            uint16_t swidth = 1, sheight = 1;
-            if (spr_size) {
-                swidth = spr_size[i].width;
-                sheight = spr_size[i].height;
-            }
-            vec3 position = (vec3){.x = pos[i].x, .y = pos[i].y, .z = -layer};
+        if (ecs_is_owned(&qit, 2)) {
+            for (int32_t i = 0; i < qit.count; ++i) {
+                if (!ecs_is_alive(it->world, qit.entities[i])) {
+                    continue;
+                }
 
-            arrpush(
-                r->sprites,
-                ((struct sprite){
-                    .pos = position,
-                    .rect = spr_calc_rect(sprite_id, flags, swidth, sheight),
-                    .scale = {.x = (float)swidth, .y = (float)sheight},
-                    .origin = origin,
-                }));
+                uint32_t sprite_id = spr[i].sprite_id;
+                float layer = spr[i].layer;
+                vec2 origin = spr[i].origin;
+
+                uint16_t flags = SpriteFlags_None;
+                if (spr_flags) {
+                    flags = spr_flags[i].flags;
+                }
+                uint16_t swidth = 1, sheight = 1;
+                if (spr_size) {
+                    swidth = spr_size[i].width;
+                    sheight = spr_size[i].height;
+                }
+                vec3 position = (vec3){.x = pos[i].x, .y = pos[i].y, .z = -layer};
+
+                arrpush(
+                    r->sprites,
+                    ((struct sprite){
+                        .pos = position,
+                        .rect = spr_calc_rect(sprite_id, flags, swidth, sheight),
+                        .scale = {.x = (float)swidth, .y = (float)sheight},
+                        .origin = origin,
+                    }));
+            }
+        } else {
+            for (int32_t i = 0; i < qit.count; ++i) {
+                if (!ecs_is_alive(it->world, qit.entities[i])) {
+                    continue;
+                }
+
+                uint32_t sprite_id = spr->sprite_id;
+                float layer = spr->layer;
+                vec2 origin = spr->origin;
+
+                uint16_t flags = SpriteFlags_None;
+                if (spr_flags) {
+                    flags = spr_flags[i].flags;
+                }
+                uint16_t swidth = 1, sheight = 1;
+                if (spr_size) {
+                    swidth = spr_size[i].width;
+                    sheight = spr_size[i].height;
+                }
+                vec3 position = (vec3){.x = pos[i].x, .y = pos[i].y, .z = -layer};
+
+                arrpush(
+                    r->sprites,
+                    ((struct sprite){
+                        .pos = position,
+                        .rect = spr_calc_rect(sprite_id, flags, swidth, sheight),
+                        .scale = {.x = (float)swidth, .y = (float)sheight},
+                        .origin = origin,
+                    }));
+            }
         }
     }
 

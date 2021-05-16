@@ -131,7 +131,7 @@ int main(int argc, char* argv[])
         {.sprite_id = 2, .layer = 2.0f, .origin = (vec2){0.5f, 0.5f}});
     ecs_set(world, InvaderPrefab, BoxCollider, {.layer = 1, .size = {0.5f, 0.5f}});
 
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 30; ++i) {
         ecs_entity_t invader = ecs_new_w_pair(world, EcsIsA, InvaderPrefab);
         ecs_set(world, invader, Position, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 6)});
         ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
