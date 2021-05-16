@@ -150,6 +150,14 @@ int main(int argc, char* argv[])
     ecs_set(world, TankControl, TankControlContext, {.bullet_prefab = TankProjectilePrefab});
 
     while (ecs_progress(world, 0.0f)) {
+
+        if (txinp_get_key_down(TXINP_KEY_I)) {
+            ecs_entity_t invader = ecs_new_w_pair(world, EcsIsA, InvaderPrefab);
+            ecs_set(
+                world, invader, Position, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 6)});
+            ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
+            ecs_set(world, invader, Target, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 6)});
+        }
     }
 
     return ecs_fini(world);
@@ -160,13 +168,6 @@ void InvaderControl(ecs_iter_t* it)
     Position* position = ecs_term(it, Position, 1);
     Velocity* velocity = ecs_term(it, Velocity, 2);
     Target* target = ecs_term(it, Target, 3);
-
-    // draw_set_prim_layer(10.0f);
-    // draw_line_col((vec2){-15, -8}, (vec2){15, 8}, (vec4){1, 0, 0, 1});
-    // draw_set_prim_layer(5.0f);
-    // draw_rect_col((vec2){-5, -5}, (vec2){5, 5}, (vec4){1, 1, 0, 1});
-    // draw_set_prim_layer(0.0f);
-    // draw_rect_col((vec2){-2, -3}, (vec2){3, 2}, (vec4){1, 0, 1, 1});
 
     for (int i = 0; i < it->count; ++i) {
         vec2 delta = vec2_sub(target[i], position[i]);
@@ -214,6 +215,13 @@ void TankControl(ecs_iter_t* it)
 
     ecs_id_t ecs_typeid(Position) = ecs_term_id(it, 1);
     ecs_id_t ecs_typeid(Velocity) = ecs_term_id(it, 2);
+
+    // draw_set_prim_layer(10.0f);
+    // draw_line_col((vec2){-15, -8}, (vec2){15, 8}, (vec4){1, 0, 0, 1});
+    // draw_set_prim_layer(5.0f);
+    // draw_rect_col((vec2){-5, -5}, (vec2){5, 5}, (vec4){1, 1, 0, 1});
+    // draw_set_prim_layer(0.0f);
+    // draw_rect_col((vec2){-2, -3}, (vec2){3, 2}, (vec4){1, 0, 1, 1});
 
     for (int32_t i = 0; i < it->count; ++i) {
         velocity[i].x = input[i].move * 32.0f;
