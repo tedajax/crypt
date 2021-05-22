@@ -97,6 +97,7 @@ typedef struct Renderer {
         float prim_layer;
     } prim_draw_state;
     ecs_query_t* q_sprites;
+    size_t prev_sprite_cap;
 } Renderer;
 
 // private state
@@ -689,10 +690,8 @@ void AttachRenderer(ecs_iter_t* it)
 
         renderer_resources resources = init_renderer_resources(
             sdl_window, (int)arrcap(sprites), config[i].canvas_width, config[i].canvas_height);
-        ecs_query_t* q_sprites = ecs_query_new(
-            world,
-            "game.comp.Position, ANY:sprite.renderer.Sprite, "
-            "?sprite.renderer.SpriteFlags, ?sprite.renderer.SpriteSize");
+        ecs_query_t* q_sprites =
+            ecs_query_new(world, "game.comp.Position, ANY:sprite.renderer.Sprite");
         ecs_query_order_by(world, q_sprites, ecs_typeid(Sprite), compare_sprite_layers);
 
         ecs_singleton_set(
@@ -737,6 +736,9 @@ void DetachRenderer(ecs_iter_t* it)
 void RendererNewFrame(ecs_iter_t* it)
 {
     Renderer* r = ecs_term(it, Renderer, 1);
+
+    r->prev_sprite_cap = arrcap(r->sprites);
+    arrsetlen(r->sprites, 0);
     arrsetlen(r->lines, 0);
     arrsetlen(r->rects, 0);
     arrsetlen(r->rect_indices, 0);
@@ -750,92 +752,70 @@ void RendererNewFrame(ecs_iter_t* it)
     igNewFrame();
 }
 
-void UpdateBuffers(ecs_iter_t* it)
+void GatherSprites(ecs_iter_t* it)
 {
-    Renderer* r = ecs_term(it, Renderer, 1);
+    Renderer* r = try_get_r();
 
-    size_t prev_cap = arrcap(r->sprites);
-    arrsetlen(r->sprites, 0);
+    Position* pos = ecs_term(it, Position, 1);
+    Sprite* spr = ecs_term(it, Sprite, 2);
 
-    ecs_query_t* query = r->q_sprites;
-    ecs_iter_t qit = ecs_query_iter(query);
-    while (ecs_query_next(&qit)) {
-        Position* pos = ecs_term(&qit, Position, 1);
-        Sprite* spr = ecs_term(&qit, Sprite, 2);
-        SpriteFlags* spr_flags = ecs_term(&qit, SpriteFlags, 3);
-        SpriteSize* spr_size = ecs_term(&qit, SpriteSize, 4);
+    if (ecs_is_owned(it, 2)) {
+        for (int32_t i = 0; i < it->count; ++i) {
+            uint32_t sprite_id = spr[i].sprite_id;
+            float layer = spr[i].layer;
+            vec2 origin = spr[i].origin;
+            uint16_t flags = spr[i].flags;
+            uint16_t swidth = spr[i].width;
+            uint16_t sheight = spr[i].height;
 
-        if (ecs_is_owned(&qit, 2)) {
-            for (int32_t i = 0; i < qit.count; ++i) {
-                if (!ecs_is_alive(it->world, qit.entities[i])) {
-                    continue;
-                }
+            vec3 position = (vec3){.x = pos[i].x, .y = pos[i].y, .z = -layer};
 
-                uint32_t sprite_id = spr[i].sprite_id;
-                float layer = spr[i].layer;
-                vec2 origin = spr[i].origin;
+            arrpush(
+                r->sprites,
+                ((struct sprite){
+                    .pos = position,
+                    .rect = spr_calc_rect(sprite_id, flags, swidth, sheight),
+                    .scale = {.x = (float)swidth, .y = (float)sheight},
+                    .origin = origin,
+                }));
+        }
+    } else {
+        uint32_t sprite_id = spr->sprite_id;
+        float layer = spr->layer;
+        vec2 origin = spr->origin;
+        uint16_t flags = spr->flags;
+        uint16_t swidth = spr->width;
+        uint16_t sheight = spr->height;
 
-                uint16_t flags = SpriteFlags_None;
-                if (spr_flags) {
-                    flags = spr_flags[i].flags;
-                }
-                uint16_t swidth = 1, sheight = 1;
-                if (spr_size) {
-                    swidth = spr_size[i].width;
-                    sheight = spr_size[i].height;
-                }
-                vec3 position = (vec3){.x = pos[i].x, .y = pos[i].y, .z = -layer};
+        for (int32_t i = 0; i < it->count; ++i) {
+            vec3 position = (vec3){.x = pos[i].x, .y = pos[i].y, .z = -layer};
 
-                arrpush(
-                    r->sprites,
-                    ((struct sprite){
-                        .pos = position,
-                        .rect = spr_calc_rect(sprite_id, flags, swidth, sheight),
-                        .scale = {.x = (float)swidth, .y = (float)sheight},
-                        .origin = origin,
-                    }));
-            }
-        } else {
-            for (int32_t i = 0; i < qit.count; ++i) {
-                if (!ecs_is_alive(it->world, qit.entities[i])) {
-                    continue;
-                }
-
-                uint32_t sprite_id = spr->sprite_id;
-                float layer = spr->layer;
-                vec2 origin = spr->origin;
-
-                uint16_t flags = SpriteFlags_None;
-                if (spr_flags) {
-                    flags = spr_flags[i].flags;
-                }
-                uint16_t swidth = 1, sheight = 1;
-                if (spr_size) {
-                    swidth = spr_size[i].width;
-                    sheight = spr_size[i].height;
-                }
-                vec3 position = (vec3){.x = pos[i].x, .y = pos[i].y, .z = -layer};
-
-                arrpush(
-                    r->sprites,
-                    ((struct sprite){
-                        .pos = position,
-                        .rect = spr_calc_rect(sprite_id, flags, swidth, sheight),
-                        .scale = {.x = (float)swidth, .y = (float)sheight},
-                        .origin = origin,
-                    }));
-            }
+            arrpush(
+                r->sprites,
+                ((struct sprite){
+                    .pos = position,
+                    .rect = spr_calc_rect(sprite_id, flags, swidth, sheight),
+                    .scale = {.x = (float)swidth, .y = (float)sheight},
+                    .origin = origin,
+                }));
         }
     }
+}
 
-    // resize gpu instance buffer if not large enough
-    size_t cap = arrcap(r->sprites);
-    if (prev_cap < cap) {
+#include "tx_input.h"
+
+void Render(ecs_iter_t* it)
+{
+    ecs_world_t* world = it->world;
+    Renderer* r = ecs_term(it, Renderer, 1);
+
+    size_t sprite_cap = arrcap(r->sprites);
+    if (sprite_cap > r->prev_sprite_cap) {
         sg_destroy_buffer(r->resources.inst_vbuf);
 
         r->resources.inst_vbuf = sg_make_buffer(&(sg_buffer_desc){
             .usage = SG_USAGE_STREAM,
-            .size = (int)(sizeof(struct sprite) * cap),
+            .size = (int)(sizeof(struct sprite) * sprite_cap),
         });
 
         r->resources.canvas.bindings.vertex_buffers[1] = r->resources.inst_vbuf;
@@ -854,14 +834,6 @@ void UpdateBuffers(ecs_iter_t* it)
         r->resources.rect_ibuf,
         r->rect_indices,
         (int)(sizeof(uint32_t) * arrlenu(r->rect_indices)));
-}
-
-#include "tx_input.h"
-
-void Render(ecs_iter_t* it)
-{
-    ecs_world_t* world = it->world;
-    Renderer* r = ecs_term(it, Renderer, 1);
 
     int width, height;
     SDL_GL_GetDrawableSize(r->sdl_window, &width, &height);
@@ -940,6 +912,21 @@ void Render(ecs_iter_t* it)
     SDL_GL_SwapWindow(r->sdl_window);
 }
 
+void FixupSpriteSize(ecs_iter_t* it)
+{
+    Sprite* sprite = ecs_term(it, Sprite, 1);
+
+    if (ecs_is_owned(it, 1)) {
+        for (int32_t i = 0; i < it->count; ++i) {
+            sprite[i].width = (sprite[i].width) ? sprite[i].width : 1;
+            sprite[i].height = (sprite[i].height) ? sprite[i].height : 1;
+        }
+    } else {
+        sprite->width = (sprite->width) ? sprite->width : 1;
+        sprite->height = (sprite->height) ? sprite->height : 1;
+    }
+}
+
 void renderer_fini(ecs_world_t* world, void* ctx)
 {
     ecs_query_free(q_renderer);
@@ -954,8 +941,6 @@ void SpriteRendererImport(ecs_world_t* world)
     ECS_IMPORT(world, GameComp);
 
     ECS_COMPONENT_DEFINE(world, Sprite);
-    ECS_COMPONENT(world, SpriteFlags);
-    ECS_COMPONENT(world, SpriteSize);
     ECS_COMPONENT(world, SpriteRenderConfig);
 
     ECS_COMPONENT(world, Renderer);
@@ -967,14 +952,14 @@ void SpriteRendererImport(ecs_world_t* world)
     ECS_SYSTEM(world, DetachRenderer, EcsUnSet, Renderer);
 
     ECS_SYSTEM(world, RendererNewFrame, EcsPostLoad, Renderer);
-    ECS_SYSTEM(world, UpdateBuffers, EcsPreStore, Renderer);
+    ECS_SYSTEM(world, GatherSprites, EcsPreStore, game.comp.Position, ANY:Sprite);
     ECS_SYSTEM(world, Render, EcsOnStore, Renderer);
+
+    ECS_SYSTEM(world, FixupSpriteSize, EcsOnSet, Sprite)
     // clang-format on
 
     q_renderer = ecs_query_new(world, "$sprite.renderer.Renderer");
 
     ECS_EXPORT_COMPONENT(Sprite);
-    ECS_EXPORT_COMPONENT(SpriteFlags);
-    ECS_EXPORT_COMPONENT(SpriteSize);
     ECS_EXPORT_COMPONENT(SpriteRenderConfig);
 }

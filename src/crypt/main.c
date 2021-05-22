@@ -120,15 +120,18 @@ int main(int argc, char* argv[])
     ecs_set(world, Tank, Position, {.x = 0.0f, .y = 9.0f});
     ecs_set(world, Tank, Velocity, {.x = 0.0f, .y = 0.0f});
     ecs_set(world, Tank, TankInput, {0});
-    ecs_set(world, Tank, Sprite, {.sprite_id = 0, .layer = 1.0f, .origin = (vec2){0.5f, 1.0f}});
-    ecs_set(world, Tank, SpriteSize, {.width = 2, .height = 1});
+    ecs_set(
+        world,
+        Tank,
+        Sprite,
+        {.sprite_id = 0, .layer = 1.0f, .origin = (vec2){0.5f, 1.0f}, .width = 2, .height = 1});
 
     ECS_PREFAB(world, InvaderPrefab, sprite.renderer.Sprite, BoxCollider, Hostile);
     ecs_set(
         world,
         InvaderPrefab,
         Sprite,
-        {.sprite_id = 2, .layer = 2.0f, .origin = (vec2){0.5f, 0.5f}});
+        {.sprite_id = 2, .layer = 2.0f, .origin = (vec2){0.5f, 0.5f}, .width = 1, .height = 1});
     ecs_set(world, InvaderPrefab, BoxCollider, {.layer = 1, .size = {0.5f, 0.5f}});
 
     for (int i = 0; i < 30; ++i) {
