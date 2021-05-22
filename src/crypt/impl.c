@@ -27,3 +27,8 @@
 
 #define HASH_IMPLEMENTATION
 #include "hash.h"
+
+#define STRPOOL_U32 uint32_t
+#define STRPOOL_U64 uint64_t
+#define STRPOOL_IMPLEMENTATION
+#include "strpool.h"

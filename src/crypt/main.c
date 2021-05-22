@@ -215,7 +215,6 @@ void TankControl(ecs_iter_t* it)
 
     ecs_id_t ecs_typeid(Position) = ecs_term_id(it, 1);
     ecs_id_t ecs_typeid(Velocity) = ecs_term_id(it, 2);
-
     // draw_set_prim_layer(10.0f);
     // draw_line_col((vec2){-15, -8}, (vec2){15, 8}, (vec4){1, 0, 0, 1});
     // draw_set_prim_layer(5.0f);

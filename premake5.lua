@@ -7,12 +7,39 @@ workspace "crypt"
     --libdirs { "external/lib/%{cfg.platform}/%{cfg.buildcfg}" }
     location "bin"
 
+project "cimgui"
+    kind "StaticLib"
+    language "C++"
+    location "bin/cimgui"
+    files "src/cimgui/**.cpp"
+    
+    filter "platforms:Win64"
+        system "Windows"
+        defines { "_CRT_SECURE_NO_WARNINGS" }
+        architecture "x86_64"
+
+    filter "platforms:Win32"
+        system "Windows"
+        defines { "_CRT_SECURE_NO_WARNINGS" }
+        architecture "x86"
+
+    filter "configurations:Debug"
+        defines { "_DEBUG" }
+        symbols "On"
+
+    filter "configurations:Release"
+        defines { "_NDEBUG" }
+        symbols "Off"
+
+
 project "crypt"
     kind "ConsoleApp"
     language "C"
     location "bin/crypt"
     files "src/crypt/**.c"    
     cppdialect "C++latest"
+    links { "cimgui" }
+    includedirs { "src/cimgui" }
     postbuildcommands { "powershell.exe -File ../../asset_pipeline.ps1 -target %{prj.name} -platform %{cfg.platform} -configuration %{cfg.buildcfg}" }
 
     filter "platforms:Win64"

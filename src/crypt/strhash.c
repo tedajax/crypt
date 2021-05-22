@@ -1,8 +1,5 @@
 #include "strhash.h"
 
-#define STRPOOL_U32 uint32_t
-#define STRPOOL_U64 uint64_t
-#define STRPOOL_IMPLEMENTATION
 #include "strpool.h"
 
 strpool_t pool;
