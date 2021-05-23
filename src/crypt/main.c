@@ -49,6 +49,7 @@ typedef struct Damage {
     ecs_entity_t source;
     ecs_entity_t target;
 } Damage;
+
 //// TAGS
 
 //// SYSTEMS
@@ -84,8 +85,8 @@ void tank_debug_gui(ecs_world_t* world, void* ctx)
     TankConfig* config = ecs_get_mut(world, context->e_tank, TankConfig, false);
 
     igLabelText("POS", "%0.2f, %0.2f", pos->x, pos->y);
-    igDragFloat(
-        "Boundary", &config->bounds_x, 0.1f, 0.0f, 32.0f, "%0.1f", ImGuiSliderFlags_AlwaysClamp);
+    igSliderFloat(
+        "Boundary", &config->bounds_x, 0.0f, 32.0f, "%0.1f", ImGuiSliderFlags_AlwaysClamp);
 
     draw_line_col(
         (vec2){-config->bounds_x, 0.0f},
@@ -167,7 +168,7 @@ int main(int argc, char* argv[])
         Tank,
         Sprite,
         {.sprite_id = 0, .layer = 1.0f, .origin = (vec2){0.5f, 1.0f}, .width = 2, .height = 1});
-    ecs_set(world, Tank, TankConfig, {.bounds_x = 14.0f});
+    ecs_set(world, Tank, TankConfig, {.bounds_x = 16.0f});
 
     ECS_PREFAB(world, InvaderPrefab, sprite.renderer.Sprite, BoxCollider, Hostile);
     ecs_set(

@@ -4,8 +4,6 @@
 #include "system_imgui.h"
 #include <ccimgui.h>
 
-enum { K_CONTEXT_MEM_MAX_SIZE = 1024 };
-
 struct mem_block {
     void* mem;
     size_t size;
@@ -15,6 +13,7 @@ struct mem_block {
 // this free list is absolutely unnecessary for the usage xpected here but I can't help myself.
 struct mem_block* free_list = NULL;
 
+enum { K_CONTEXT_MEM_MAX_SIZE = 1024 };
 uint8_t context_memory[K_CONTEXT_MEM_MAX_SIZE];
 uint8_t* context_mem_head = context_memory;
 
