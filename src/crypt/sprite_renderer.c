@@ -5,10 +5,7 @@
 #include "stb_image.h"
 #include "string.h"
 #include "system_sdl2.h"
-#include <GL/gl3w.h>
 #include <SDL2/SDL.h>
-#include <ccimgui.h>
-#include <cimgui_impl.h>
 
 ECS_COMPONENT_DECLARE(Sprite);
 
@@ -83,8 +80,6 @@ typedef struct renderer_resources {
 
 typedef struct Renderer {
     SDL_Window* sdl_window;
-    SDL_GLContext gl_context;
-    ImGuiIO* imgui;
     renderer_resources resources;
     float pixels_per_meter;
     uint32_t canvas_width;
@@ -659,19 +654,6 @@ void AttachRenderer(ecs_iter_t* it)
         const Sdl2Window* window = ecs_get(world, config->e_window, Sdl2Window);
 
         SDL_Window* sdl_window = window->window;
-        SDL_GLContext ctx = SDL_GL_CreateContext(sdl_window);
-
-        if (gl3wInit() != GL3W_OK) {
-            ecs_err("Gl3w failed to init.");
-            break;
-        }
-
-        igCreateContext(NULL);
-        ImGuiIO* imgui = igGetIO();
-        imgui->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-        ImGui_ImplSDL2_InitForOpenGL(sdl_window, ctx);
-        ImGui_ImplOpenGL3_Init(NULL);
-        igStyleColorsDark(NULL);
 
         sg_setup(&(sg_desc){0});
         TX_ASSERT(sg_isvalid());
@@ -700,12 +682,10 @@ void AttachRenderer(ecs_iter_t* it)
             {
                 .resources = resources,
                 .sdl_window = sdl_window,
-                .imgui = imgui,
                 .sprites = sprites,
                 .lines = lines,
                 .rects = rects,
                 .rect_indices = rect_indices,
-                .gl_context = ctx,
                 .pixels_per_meter = config[i].pixels_per_meter,
                 .canvas_width = config[i].canvas_width,
                 .canvas_height = config[i].canvas_height,
@@ -730,7 +710,6 @@ void DetachRenderer(ecs_iter_t* it)
     ecs_query_free(r->q_sprites);
 
     sg_shutdown();
-    SDL_GL_DeleteContext(r->gl_context);
 }
 
 void RendererNewFrame(ecs_iter_t* it)
@@ -742,14 +721,6 @@ void RendererNewFrame(ecs_iter_t* it)
     arrsetlen(r->lines, 0);
     arrsetlen(r->rects, 0);
     arrsetlen(r->rect_indices, 0);
-
-    int win_w, win_h;
-    SDL_GetWindowSize(r->sdl_window, &win_w, &win_h);
-    r->imgui->DisplaySize = (ImVec2){.x = (float)win_w, .y = (float)win_h};
-    r->imgui->DeltaTime = it->delta_time;
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplSDL2_NewFrame(r->sdl_window);
-    igNewFrame();
 }
 
 void GatherSprites(ecs_iter_t* it)
@@ -905,11 +876,6 @@ void Render(ecs_iter_t* it)
     sg_end_pass();
 
     sg_commit();
-
-    igRender();
-    ImGui_ImplOpenGL3_RenderDrawData(igGetDrawData());
-
-    SDL_GL_SwapWindow(r->sdl_window);
 }
 
 void FixupSpriteSize(ecs_iter_t* it)

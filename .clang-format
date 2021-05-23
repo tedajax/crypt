@@ -27,7 +27,7 @@ PenaltyReturnTypeOnItsOwnLine: 100000
 IndentPPDirectives: None
 BraceWrapping:
   AfterClass:      false
-  AfterControlStatement: false
+  AfterControlStatement: MultiLine
   AfterEnum:       false
   AfterFunction:   true
   AfterNamespace:  false

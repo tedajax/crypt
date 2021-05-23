@@ -1,10 +1,13 @@
+#include "debug_gui.h"
 #include "game_components.h"
 #include "sprite_renderer.h"
 #include "strhash.h"
+#include "system_imgui.h"
 #include "system_sdl2.h"
 #include "tx_input.h"
 #include "tx_math.h"
 #include "tx_rand.h"
+#include <ccimgui.h>
 #include <time.h>
 
 //// COMPONENTS
@@ -14,6 +17,10 @@ typedef struct TankInput {
     float move;
     bool fire;
 } TankInput;
+
+typedef struct TankConfig {
+    float bounds_x;
+} TankConfig;
 
 typedef struct BoxCollider {
     uint8_t layer; // TEMP
@@ -57,10 +64,38 @@ void CheckColliderIntersections(ecs_iter_t* it);
 
 ECS_COMPONENT_DECLARE(BoxCollider);
 ECS_COMPONENT_DECLARE(ExpireAfter);
+ECS_COMPONENT_DECLARE(TankConfig);
 
 ECS_TAG_DECLARE(Projectile);
 ECS_TAG_DECLARE(Friendly);
 ECS_TAG_DECLARE(Hostile);
+
+typedef struct tank_debug_context {
+    ecs_entity_t e_tank;
+} tank_debug_context;
+
+void tank_debug_gui(ecs_world_t* world, void* ctx)
+{
+    tank_debug_context* context = (tank_debug_context*)ctx;
+
+    ECS_IMPORT(world, GameComp);
+
+    const Position* pos = ecs_get(world, context->e_tank, Position);
+    TankConfig* config = ecs_get_mut(world, context->e_tank, TankConfig, false);
+
+    igLabelText("POS", "%0.2f, %0.2f", pos->x, pos->y);
+    igDragFloat(
+        "Boundary", &config->bounds_x, 0.1f, 0.0f, 32.0f, "%0.1f", ImGuiSliderFlags_AlwaysClamp);
+
+    draw_line_col(
+        (vec2){-config->bounds_x, 0.0f},
+        (vec2){-config->bounds_x, 9.0f},
+        (vec4){1.0f, 1.0f, 0.0f, 1.0f});
+    draw_line_col(
+        (vec2){config->bounds_x, 0.0f},
+        (vec2){config->bounds_x, 9.0f},
+        (vec4){1.0f, 1.0f, 0.0f, 1.0f});
+}
 
 int main(int argc, char* argv[])
 {
@@ -74,14 +109,18 @@ int main(int argc, char* argv[])
 
     ECS_IMPORT(world, GameComp);
     ECS_IMPORT(world, SystemSdl2);
+    ECS_IMPORT(world, SystemImgui);
     ECS_IMPORT(world, SpriteRenderer);
+    ECS_IMPORT(world, DebugGui);
+
+    ECS_ENTITY(world, Root, system.sdl2.WindowConfig);
 
     ecs_entity_t window =
-        ecs_set(world, 0, WindowConfig, {.title = "crypt", .width = 1920, .height = 1080});
+        ecs_set(world, Root, WindowConfig, {.title = "crypt", .width = 1920, .height = 1080});
 
     ecs_entity_t render_config = ecs_set(
         world,
-        0,
+        Root,
         SpriteRenderConfig,
         {
             .e_window = window,
@@ -90,8 +129,11 @@ int main(int argc, char* argv[])
             .canvas_height = 144,
         });
 
+    ecs_set(world, Root, ImguiDesc, {0});
+
     ECS_COMPONENT(world, Target);
     ECS_COMPONENT(world, TankInput);
+    ECS_COMPONENT_DEFINE(world, TankConfig);
     ECS_COMPONENT(world, TankControlContext);
     ECS_COMPONENT_DEFINE(world, BoxCollider);
     ECS_COMPONENT_DEFINE(world, ExpireAfter);
@@ -106,7 +148,7 @@ int main(int argc, char* argv[])
 
     // clang-format off
     ECS_SYSTEM(world, TankGatherInput, EcsPostLoad, TankInput);
-    ECS_SYSTEM(world, TankControl, EcsOnUpdate, game.comp.Position, game.comp.Velocity, TankInput, SYSTEM:TankControlContext);
+    ECS_SYSTEM(world, TankControl, EcsOnUpdate, game.comp.Position, TankInput, TankConfig, SYSTEM:TankControlContext);
     ECS_SYSTEM(world, InvaderControl, EcsOnUpdate, game.comp.Position, game.comp.Velocity, Target);
     ECS_SYSTEM(world, Move, EcsOnUpdate, game.comp.Position, game.comp.Velocity);
     ECS_SYSTEM(world, ColliderView, EcsPostUpdate, game.comp.Position, ANY:BoxCollider);
@@ -125,6 +167,7 @@ int main(int argc, char* argv[])
         Tank,
         Sprite,
         {.sprite_id = 0, .layer = 1.0f, .origin = (vec2){0.5f, 1.0f}, .width = 2, .height = 1});
+    ecs_set(world, Tank, TankConfig, {.bounds_x = 14.0f});
 
     ECS_PREFAB(world, InvaderPrefab, sprite.renderer.Sprite, BoxCollider, Hostile);
     ecs_set(
@@ -151,6 +194,26 @@ int main(int argc, char* argv[])
     }
 
     ecs_set(world, TankControl, TankControlContext, {.bullet_prefab = TankProjectilePrefab});
+
+    ECS_ENTITY(world, TankDebugGui, debug.gui.Window);
+    ecs_set(
+        world,
+        TankDebugGui,
+        DebugWindow,
+        {
+            .name = "Tank",
+            .shortcut =
+                {
+                    .key = TXINP_KEY_T,
+                    .mod = TXINP_MOD_SHIFT,
+                },
+            .window_fn = tank_debug_gui,
+            .ctx =
+                &(tank_debug_context){
+                    .e_tank = Tank,
+                },
+            .ctx_size = sizeof(tank_debug_context),
+        });
 
     while (ecs_progress(world, 0.0f)) {
 
@@ -212,12 +275,11 @@ void TankGatherInput(ecs_iter_t* it)
 void TankControl(ecs_iter_t* it)
 {
     Position* position = ecs_term(it, Position, 1);
-    Velocity* velocity = ecs_term(it, Velocity, 2);
-    TankInput* input = ecs_term(it, TankInput, 3);
+    TankInput* input = ecs_term(it, TankInput, 2);
+    TankConfig* config = ecs_term(it, TankConfig, 3);
     TankControlContext* context = ecs_term(it, TankControlContext, 4);
 
-    ecs_id_t ecs_typeid(Position) = ecs_term_id(it, 1);
-    ecs_id_t ecs_typeid(Velocity) = ecs_term_id(it, 2);
+    ECS_IMPORT(it->world, GameComp);
     // draw_set_prim_layer(10.0f);
     // draw_line_col((vec2){-15, -8}, (vec2){15, 8}, (vec4){1, 0, 0, 1});
     // draw_set_prim_layer(5.0f);
@@ -226,7 +288,11 @@ void TankControl(ecs_iter_t* it)
     // draw_rect_col((vec2){-2, -3}, (vec2){3, 2}, (vec4){1, 0, 1, 1});
 
     for (int32_t i = 0; i < it->count; ++i) {
-        velocity[i].x = input[i].move * 32.0f;
+
+        float vel_x = input[i].move * 32.0f;
+        position[i].x += vel_x * it->delta_time;
+
+        position[i].x = clampf(position[i].x, -config->bounds_x + 0.9f, config->bounds_x - 0.9f);
 
         if (input[i].fire) {
             ecs_entity_t projectile = ecs_new_w_pair(it->world, EcsIsA, context->bullet_prefab);
