@@ -1,3 +1,4 @@
+#include "color.h"
 #include "debug_gui.h"
 #include "game_components.h"
 #include "sprite_renderer.h"
@@ -12,6 +13,10 @@
 
 //// COMPONENTS
 typedef vec2 Target;
+typedef struct Facing {
+    float pos;
+    float vel;
+} Facing;
 
 typedef struct TankInput {
     float move;
@@ -50,7 +55,14 @@ typedef struct Damage {
     ecs_entity_t target;
 } Damage;
 
+ECS_COMPONENT_DECLARE(BoxCollider);
+ECS_COMPONENT_DECLARE(ExpireAfter);
+ECS_COMPONENT_DECLARE(TankConfig);
+
 //// TAGS
+ECS_TAG_DECLARE(Projectile);
+ECS_TAG_DECLARE(Friendly);
+ECS_TAG_DECLARE(Hostile);
 
 //// SYSTEMS
 void InvaderControl(ecs_iter_t* it);
@@ -63,13 +75,11 @@ void CollisionTrigger(ecs_iter_t* it);
 void CreateColliderQueries(ecs_iter_t* it);
 void CheckColliderIntersections(ecs_iter_t* it);
 
-ECS_COMPONENT_DECLARE(BoxCollider);
-ECS_COMPONENT_DECLARE(ExpireAfter);
-ECS_COMPONENT_DECLARE(TankConfig);
-
-ECS_TAG_DECLARE(Projectile);
-ECS_TAG_DECLARE(Friendly);
-ECS_TAG_DECLARE(Hostile);
+vec2 rnd_dir()
+{
+    float ang = txrng_rangef(0.0f, TX_PI * 2.0f);
+    return (vec2){.x = cosf(ang), .y = sinf(ang)};
+}
 
 typedef struct tank_debug_context {
     ecs_entity_t e_tank;
@@ -133,6 +143,7 @@ int main(int argc, char* argv[])
     ecs_set(world, Root, ImguiDesc, {0});
 
     ECS_COMPONENT(world, Target);
+    ECS_COMPONENT(world, Facing);
     ECS_COMPONENT(world, TankInput);
     ECS_COMPONENT_DEFINE(world, TankConfig);
     ECS_COMPONENT(world, TankControlContext);
@@ -143,15 +154,13 @@ int main(int argc, char* argv[])
     ECS_TAG_DEFINE(world, Projectile);
     ECS_TAG_DEFINE(world, Friendly);
     ECS_TAG_DEFINE(world, Hostile);
-
-    // "[in] flecs.components.transform.Position3,"\
-//     "[in] ANY:flecs.components.physics.Collider FOR flecs.components.geometry.Box || ANY:flecs.components.geometry.Box,"
+    ECS_TAG(world, NoAutoMove);
 
     // clang-format off
     ECS_SYSTEM(world, TankGatherInput, EcsPostLoad, TankInput);
-    ECS_SYSTEM(world, TankControl, EcsOnUpdate, game.comp.Position, TankInput, TankConfig, SYSTEM:TankControlContext);
-    ECS_SYSTEM(world, InvaderControl, EcsOnUpdate, game.comp.Position, game.comp.Velocity, Target);
-    ECS_SYSTEM(world, Move, EcsOnUpdate, game.comp.Position, game.comp.Velocity);
+    ECS_SYSTEM(world, TankControl, EcsOnUpdate, game.comp.Position, game.comp.Velocity, TankInput, TankConfig, SYSTEM:TankControlContext);
+    ECS_SYSTEM(world, InvaderControl, EcsOnUpdate, game.comp.Position, game.comp.Velocity, Target, Facing);
+    ECS_SYSTEM(world, Move, EcsOnUpdate, game.comp.Position, game.comp.Velocity, !NoAutoMove);
     ECS_SYSTEM(world, ColliderView, EcsPostUpdate, game.comp.Position, ANY:BoxCollider);
     ECS_SYSTEM(world, ExpireAfterUpdate, EcsOnUpdate, ExpireAfter);
     // ECS_SYSTEM(world, CreateColliderQueries, EcsOnSet, ColliderQuery);
@@ -159,7 +168,13 @@ int main(int argc, char* argv[])
     // clang-format on
 
     ECS_ENTITY(
-        world, Tank, game.comp.Position, game.comp.Velocity, TankInput, sprite.renderer.Sprite);
+        world,
+        Tank,
+        game.comp.Position,
+        game.comp.Velocity,
+        TankInput,
+        sprite.renderer.Sprite,
+        NoAutoMove);
     ecs_set(world, Tank, Position, {.x = 0.0f, .y = 9.0f});
     ecs_set(world, Tank, Velocity, {.x = 0.0f, .y = 0.0f});
     ecs_set(world, Tank, TankInput, {0});
@@ -178,11 +193,17 @@ int main(int argc, char* argv[])
         {.sprite_id = 2, .layer = 2.0f, .origin = (vec2){0.5f, 0.5f}, .width = 1, .height = 1});
     ecs_set(world, InvaderPrefab, BoxCollider, {.layer = 1, .size = {0.5f, 0.5f}});
 
-    for (int i = 0; i < 30; ++i) {
-        ecs_entity_t invader = ecs_new_w_pair(world, EcsIsA, InvaderPrefab);
-        ecs_set(world, invader, Position, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 6)});
-        ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
-        ecs_set(world, invader, Target, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 6)});
+    for (float x = -14.0f; x <= 14.0f; x += 2.0f) {
+        for (float y = -8.0f; y <= 4.0f; y += 1.25f) {
+            ecs_entity_t invader = ecs_new_w_pair(world, EcsIsA, InvaderPrefab);
+            float facing = txrng_rangef(0.0f, TX_PI * 2.0f);
+            vec2 dir = rnd_dir();
+            dir = vec2_scale(dir, 0.1f);
+            ecs_set(world, invader, Position, {.x = x + dir.x, .y = y + dir.y});
+            ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
+            ecs_set(world, invader, Target, {.x = x, .y = y});
+            ecs_set(world, invader, Facing, {facing});
+        }
     }
 
     ECS_PREFAB(world, TankProjectilePrefab, Projectile, BoxCollider, Friendly);
@@ -235,21 +256,44 @@ void InvaderControl(ecs_iter_t* it)
     Position* position = ecs_term(it, Position, 1);
     Velocity* velocity = ecs_term(it, Velocity, 2);
     Target* target = ecs_term(it, Target, 3);
+    Facing* facing = ecs_term(it, Facing, 4);
 
     for (int i = 0; i < it->count; ++i) {
         vec2 delta = vec2_sub(target[i], position[i]);
         vec2 normDir = vec2_norm(delta);
         float dist = vec2_len(delta);
-        float accel = 10.0f;
+        float targetFacing = atan2f(normDir.y, normDir.x);
+        facing[i].pos = smooth_damp_angle(
+            facing[i].pos,
+            targetFacing,
+            &facing[i].vel,
+            0.25f,
+            INFINITY,
+            it->delta_time); // facing[i].pos = lerpf(facing[i], targetFacing, 0.1f);
+        float accel = 1.0f;
 
-        if (vec2_len(velocity[i]) > 0.0f) {
-            vec2 normVel = vec2_norm(velocity[i]);
-            if (vec2_dot(normDir, normVel) < 0.0f && dist > 1.0f) {
-                accel *= 2.0f;
-            }
-        }
+        vec2 dir = (vec2){.x = cosf(facing[i].pos), .y = sinf(facing[i].pos)};
 
-        vec2 vel = vec2_add(velocity[i], vec2_scale(normDir, it->delta_time * accel));
+        draw_line_col2(
+            position[i],
+            vec2_add(position[i], vec2_scale(dir, 2.0f)),
+            k_color_azure,
+            k_color_chartreuse);
+
+        draw_line_col2(
+            position[i],
+            vec2_add(position[i], vec2_scale(normDir, 2.0f)),
+            k_color_rose,
+            k_color_violet);
+
+        // if (vec2_len(velocity[i]) > 0.0f) {
+        //     vec2 normVel = vec2_norm(velocity[i]);
+        //     if (vec2_dot(dir, normVel) < 0.0f && dist > 1.0f) {
+        //         accel *= 2.0f;
+        //     }
+        // }
+
+        vec2 vel = vec2_add(velocity[i], vec2_scale(dir, it->delta_time * accel));
         if (vec2_len(vel) > 25.0f) {
             vel = vec2_scale(vec2_norm(vel), 25.0f);
         }
@@ -276,9 +320,10 @@ void TankGatherInput(ecs_iter_t* it)
 void TankControl(ecs_iter_t* it)
 {
     Position* position = ecs_term(it, Position, 1);
-    TankInput* input = ecs_term(it, TankInput, 2);
-    TankConfig* config = ecs_term(it, TankConfig, 3);
-    TankControlContext* context = ecs_term(it, TankControlContext, 4);
+    Velocity* velocity = ecs_term(it, Velocity, 2);
+    TankInput* input = ecs_term(it, TankInput, 3);
+    TankConfig* config = ecs_term(it, TankConfig, 4);
+    TankControlContext* context = ecs_term(it, TankControlContext, 5);
 
     ECS_IMPORT(it->world, GameComp);
     // draw_set_prim_layer(10.0f);
@@ -289,9 +334,8 @@ void TankControl(ecs_iter_t* it)
     // draw_rect_col((vec2){-2, -3}, (vec2){3, 2}, (vec4){1, 0, 1, 1});
 
     for (int32_t i = 0; i < it->count; ++i) {
-
-        float vel_x = input[i].move * 32.0f;
-        position[i].x += vel_x * it->delta_time;
+        velocity[i].x = input[i].move * 32.0f;
+        position[i] = vec2_add(position[i], vec2_scale(velocity[i], it->delta_time));
 
         position[i].x = clampf(position[i].x, -config->bounds_x + 0.9f, config->bounds_x - 0.9f);
 
