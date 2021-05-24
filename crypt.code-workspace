@@ -8,7 +8,8 @@
 		"files.associations": {
 			"*.h": "c",
 			"*.c": "c",
-			"imgui*": "cpp"
+			"imgui*": "cpp",
+			"compare": "c"
 		}
 	}
 }
