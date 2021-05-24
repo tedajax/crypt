@@ -6,6 +6,7 @@
 #include <math.h>
 
 #define TX_PI 3.14159265358979f
+#define TX_TAU 6.28318530717958f
 #define TX_EPSILON 1e-6f
 
 struct vector2 {
@@ -13,6 +14,9 @@ struct vector2 {
         float v[2];
         struct {
             float x, y;
+        };
+        struct {
+            float r, a;
         };
     };
 };
@@ -23,6 +27,9 @@ struct vector3 {
         struct {
             float x, y, z;
         };
+        struct {
+            float r, g, b;
+        };
     };
 };
 
@@ -31,6 +38,9 @@ struct vector4 {
         float v[4];
         struct {
             float x, y, z, w;
+        };
+        struct {
+            float r, g, b, a;
         };
     };
 };
@@ -79,6 +89,20 @@ float signf(const float v); // v < 0 -> -1, v == 0 > 0, v > 0 -> 1
 #define approx(a, b) ((abs(a - b)) < TX_EPSILON)
 #define near_zero(v) approx(v, 0)
 #define mod(a, b) ((((a) % (b)) + (b)) % (b))
+float repeat(float v, float max);
+float ping_pong(float v, float len);
+vec2 vec2_from_angle(float radians);
+float angle_from_vec2(const vec2 norm_vec);
+float lerp_angle(float a, float b, float t);
+float inv_lerp(float a, float b, float v);
+float delta_angle(float a, float b);
+float move_to(float from, float to, float delta);
+float rotate_to(float from, float to, float delta);
+float smooth_step(float from, float to, float t);
+float fade(float t);
+float grad(int32_t hash, float x, float y, float z);
+float smooth_damp(float from, float to, float* speed, float time, float max_speed, float dt);
+float smooth_damp_angle(float from, float to, float* speed, float time, float max_speed, float dt);
 
 vec2 vec2_add(const vec2 a, const vec2 b);
 vec2 vec2_sub(const vec2 a, const vec2 b);
@@ -166,7 +190,7 @@ quat quat_from_mat4x4(const mat4 m);
 // Implementation
 #ifdef TX_MATH_IMPLEMENTATION
 
-    #pragma region Basic Math Implementation
+#pragma region Basic Math Implementation
 
 // math utilities
 float clampf(const float v, const float min, const float max)
@@ -194,9 +218,131 @@ float signf(const float v)
     return (v == 0.0f) ? 0.0f : (v < 0) ? -1.0f : 1.0f;
 }
 
-    #pragma endregion
+float repeat(float v, float max)
+{
+    return clampf(v - floorf(v / max) * max, 0.f, max);
+}
 
-    #pragma region Vec2 Implementation
+float ping_pong(float v, float len)
+{
+    v = repeat(v, len * 2.f);
+    return len - abs(v - len);
+}
+
+vec2 vec2_from_angle(float radians)
+{
+    return (vec2){.x = cosf(radians), .y = sinf(radians)};
+}
+
+float angle_from_vec2(const vec2 norm_vec)
+{
+    return repeat(atan2f(norm_vec.y, norm_vec.x), TX_TAU);
+}
+
+float lerp_angle(float a, float b, float t)
+{
+    return a + delta_angle(a, b) * t;
+}
+
+float inv_lerp(float a, float b, float v)
+{
+    if (a != b) {
+        return clampf01((v - a) / (b - a));
+    }
+    return 0.f;
+}
+
+float delta_angle(float a, float b)
+{
+    float delta = repeat(b - a, TX_TAU);
+    if (delta > TX_PI) {
+        delta -= TX_TAU;
+    }
+    return delta;
+}
+
+float move_to(float from, float to, float delta)
+{
+    if (abs(to - from) <= delta) {
+        return to;
+    }
+    return from + signf(to - from) * delta;
+}
+
+float rotate_to(float from, float to, float delta)
+{
+    float da = delta_angle(from, to);
+    if (-delta < da && da < delta) {
+        return to;
+    }
+    return move_to(from, from + da, delta);
+}
+
+float smooth_step(float from, float to, float t)
+{
+    t = clampf01(t);
+    t = -2.f * t * t * t + 3.f * t * t;
+    return to * t + from * (1.f - t);
+}
+
+float fade(float t)
+{
+    return t * t * t * (t * (t * 6 - 15) + 10);
+}
+
+float grad(int32_t hash, float x, float y, float z)
+{
+    int32_t h = hash & 15;
+    float u = (h < 8) ? x : y;
+    float v = (h < 4) ? y : h == 12 || h == 14 ? x : z;
+    return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
+}
+
+float smooth_damp(float from, float to, float* speed, float time, float max_speed, float dt)
+{
+    // from Unity math reference implementation
+    //
+    // https://github.com/Unity-Technologies/UnityCsReference/blob/master/Runtime/Export/Mathf.cs
+    // originally from Game Programming Gems 4 Chapter 1.10
+
+    float spd = (speed) ? *speed : 0.0f;
+
+    time = max(0.0001f, time);
+    float omega = 2.f / time;
+
+    float x = omega * dt;
+    float exp = 1.f / (1.f + x + 0.48f * x * x + 0.235f * x * x * x);
+    float delta = to - from;
+    float origTo = to;
+
+    float maxDelta = max_speed * time;
+    delta = clampf(delta, -maxDelta, maxDelta);
+    to = from - delta;
+
+    float temp = (spd + omega * delta) * dt;
+    spd = (spd - omega * temp) * exp;
+    float ret = to + (delta + temp) * exp;
+
+    // prevent overshoots
+    if (origTo - from > 0.0f == ret > origTo) {
+        ret = origTo;
+        spd = (ret - origTo) / dt;
+    }
+
+    if (speed) *speed = spd;
+
+    return ret;
+}
+
+float smooth_damp_angle(float from, float to, float* speed, float time, float max_speed, float dt)
+{
+    float target = from + delta_angle(from, to);
+    return smooth_damp(from, target, speed, time, max_speed, dt);
+}
+
+#pragma endregion
+
+#pragma region Vec2 Implementation
 vec2 vec2_add(const vec2 a, const vec2 b)
 {
     return (vec2){
@@ -299,9 +445,9 @@ vec2 vec2_abs(const vec2 v)
         .y = fabsf(v.y),
     };
 }
-    #pragma endregion
+#pragma endregion
 
-    #pragma region Vec3 Implementation
+#pragma region Vec3 Implementation
 vec3 vec3_add(const vec3 a, const vec3 b)
 {
     return (vec3){
@@ -422,9 +568,9 @@ vec3 vec3_abs(const vec3 v)
         .z = fabsf(v.z),
     };
 }
-    #pragma endregion
+#pragma endregion
 
-    #pragma region Vec4 Implementation
+#pragma region Vec4 Implementation
 vec4 vec4_add(const vec4 a, const vec4 b)
 {
     return (vec4){
@@ -547,9 +693,9 @@ vec4 vec4_abs(const vec4 v)
     };
 }
 
-    #pragma endregion
+#pragma endregion
 
-    #pragma region Mat4 Implementation
+#pragma region Mat4 Implementation
 mat4 mat4_identity()
 {
     return (mat4){
@@ -949,9 +1095,9 @@ mat4 mat4_arcball(const mat4 m, const vec2 a, const vec2 b, float s)
     const float radians = acosf(vec3_dot(a3, b3)) * s;
     return mat4_rotate(m, c.x, c.y, c.z, radians);
 }
-    #pragma endregion
+#pragma endregion
 
-    #pragma region Quat Implementation
+#pragma region Quat Implementation
 quat quat_identity()
 {
     // 0, 0, 0, 1
@@ -1076,6 +1222,6 @@ quat quat_from_mat4(const mat4 m)
         .w = m.m[i2][i1] - m.m[i1][i2] / (2.0f * r),
     };
 }
-    #pragma endregion
+#pragma endregion
 
 #endif // TX_MATH_IMPL
