@@ -96,8 +96,8 @@ static void UpdateDebugWindows(ecs_iter_t* it)
                 if (window[i].window_fn) {
                     window[i].window_fn(it->world, window[i].ctx);
                 }
-                igEnd();
             }
+            igEnd();
         }
     }
 }

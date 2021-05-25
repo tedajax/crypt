@@ -54,11 +54,18 @@ static void ImguiRender(ecs_iter_t* it)
     ImGui_ImplOpenGL3_RenderDrawData(igGetDrawData());
 }
 
+void on_sdl2_event(const SDL_Event* event)
+{
+    ImGui_ImplSDL2_ProcessEvent(event);
+}
+
 void SystemImguiImport(ecs_world_t* world)
 {
     ECS_MODULE(world, SystemImgui);
 
     ECS_IMPORT(world, SystemSdl2);
+
+    ecs_set(world, Sdl2, Sdl2Input, {.event_fn = on_sdl2_event});
 
     ECS_COMPONENT(world, ImguiContext);
     ECS_COMPONENT(world, ImguiDesc);

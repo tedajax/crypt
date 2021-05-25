@@ -1,6 +1,5 @@
 #include "system_sdl2.h"
 
-#include "system_imgui.h"
 #include "tx_input.h"
 #include <GL/gl3w.h>
 #include <SDL2/SDL.h>
@@ -12,12 +11,16 @@ void sdl2_fini(ecs_world_t* world, void* ctx)
 
 static void Sdl2ProcessEvents(ecs_iter_t* it)
 {
+    Sdl2Input* input = ecs_term(it, Sdl2Input, 1);
+
     txinp_update();
 
     for (int32_t i = 0; i < it->count; ++i) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            // ImGui_ImplSDL2_ProcessEvent(&event);
+            if (input->event_fn) {
+                input->event_fn(&event);
+            }
             switch (event.type) {
             case SDL_QUIT:
                 ecs_quit(it->world);
@@ -147,11 +150,13 @@ void SystemSdl2Import(ecs_world_t* world)
 
     ecs_atfini(world, sdl2_fini, NULL);
 
-    ECS_TAG(world, Sdl2Input);
+    ECS_COMPONENT(world, Sdl2Input);
 
     ECS_SYSTEM(world, Sdl2ProcessEvents, EcsOnLoad, Sdl2Input);
 
     ECS_ENTITY(world, Sdl2, Sdl2Input);
+    ecs_set(world, Sdl2, Sdl2Input, {.event_fn = NULL});
+    ecs_set(world, Sdl2, EcsName, {.value = "Sdl2"});
 
     ECS_EXPORT_ENTITY(Sdl2);
 
@@ -179,5 +184,6 @@ void SystemSdl2Import(ecs_world_t* world)
     ECS_SYSTEM(world, Sdl2DestroyGLContext, EcsUnSet, Sdl2GlContext);
     ECS_SYSTEM(world, Sdl2SwapWindow, EcsPostFrame, Sdl2Window, Sdl2GlContext);
 
+    ECS_EXPORT_COMPONENT(Sdl2Input);
     ECS_EXPORT_COMPONENT(WindowConfig);
 }

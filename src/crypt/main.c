@@ -45,6 +45,21 @@ typedef struct TankControlContext {
     ecs_entity_t bullet_prefab;
 } TankControlContext;
 
+typedef struct InvaderControlContext {
+    ecs_query_t* q_invaders;
+    vec2 spacing;
+    int32_t move_dir;
+    float min_speed;
+    float max_speed;
+    float step_dist;
+    int32_t invader_total;
+    int32_t invader_count;
+} InvaderControlContext;
+
+typedef struct InvaderPosition {
+    uint16_t x, y;
+} InvaderPosition;
+
 typedef struct Health {
     float health;
 } Health;
@@ -58,6 +73,7 @@ typedef struct Damage {
 ECS_COMPONENT_DECLARE(BoxCollider);
 ECS_COMPONENT_DECLARE(ExpireAfter);
 ECS_COMPONENT_DECLARE(TankConfig);
+ECS_COMPONENT_DECLARE(InvaderControlContext);
 
 //// TAGS
 ECS_TAG_DECLARE(Projectile);
@@ -108,6 +124,27 @@ void tank_debug_gui(ecs_world_t* world, void* ctx)
         (vec4){1.0f, 1.0f, 0.0f, 1.0f});
 }
 
+typedef struct invader_control_debug_context {
+    ecs_entity_t e_control;
+} invader_control_debug_context;
+
+void invader_control_debug_gui(ecs_world_t* world, void* ctx)
+{
+    invader_control_debug_context* context = (invader_control_debug_context*)ctx;
+
+    InvaderControlContext* control =
+        ecs_get_mut(world, context->e_control, InvaderControlContext, false);
+
+    if (igButton("RESET", (ImVec2){-1, 30})) {
+    }
+
+    igLabelText("Alive", "%d", control->invader_count);
+    igLabelText("Total", "%d", control->invader_total);
+    igInputFloat("Min Speed", &control->min_speed, 0.1f, 1.0f, "%.02f", ImGuiInputTextFlags_None);
+    igInputFloat("Max Speed", &control->max_speed, 0.1f, 1.0f, "%.02f", ImGuiInputTextFlags_None);
+    igInputFloat("Step Dist", &control->step_dist, 0.1f, 1.0f, "%.02f", ImGuiInputTextFlags_None);
+}
+
 int main(int argc, char* argv[])
 {
     txrng_seed((uint32_t)time(NULL));
@@ -150,16 +187,22 @@ int main(int argc, char* argv[])
     ECS_COMPONENT_DEFINE(world, BoxCollider);
     ECS_COMPONENT_DEFINE(world, ExpireAfter);
     ECS_COMPONENT(world, ColliderQuery);
+    ECS_COMPONENT(world, InvaderPosition);
+    ECS_COMPONENT_DEFINE(world, InvaderControlContext);
 
     ECS_TAG_DEFINE(world, Projectile);
     ECS_TAG_DEFINE(world, Friendly);
     ECS_TAG_DEFINE(world, Hostile);
     ECS_TAG(world, NoAutoMove);
 
+    ECS_ENTITY(world, InvaderRoot, game.comp.Position);
+    ecs_set(world, InvaderRoot, Position, {.x = -15.0f, .y = -8.0f});
+    ecs_set(world, InvaderRoot, EcsName, {.value = "InvaderRoot"});
+
     // clang-format off
     ECS_SYSTEM(world, TankGatherInput, EcsPostLoad, TankInput);
     ECS_SYSTEM(world, TankControl, EcsOnUpdate, game.comp.Position, game.comp.Velocity, TankInput, TankConfig, SYSTEM:TankControlContext);
-    ECS_SYSTEM(world, InvaderControl, EcsOnUpdate, game.comp.Position, game.comp.Velocity, Target, Facing);
+    ECS_SYSTEM(world, InvaderControl, EcsOnUpdate, SYSTEM:InvaderControlContext, InvaderRoot:game.comp.Position);
     ECS_SYSTEM(world, Move, EcsOnUpdate, game.comp.Position, game.comp.Velocity, !NoAutoMove);
     ECS_SYSTEM(world, ColliderView, EcsPostUpdate, game.comp.Position, ANY:BoxCollider);
     ECS_SYSTEM(world, ExpireAfterUpdate, EcsOnUpdate, ExpireAfter);
@@ -193,18 +236,30 @@ int main(int argc, char* argv[])
         {.sprite_id = 2, .layer = 2.0f, .origin = (vec2){0.5f, 0.5f}, .width = 1, .height = 1});
     ecs_set(world, InvaderPrefab, BoxCollider, {.layer = 1, .size = {0.5f, 0.5f}});
 
-    for (float x = -14.0f; x <= 14.0f; x += 2.0f) {
-        for (float y = -8.0f; y <= 4.0f; y += 1.25f) {
+    int32_t invader_ct = 0;
+    for (uint16_t x = 0; x < 14; ++x) {
+        for (uint16_t y = 0; y < 6; ++y) {
             ecs_entity_t invader = ecs_new_w_pair(world, EcsIsA, InvaderPrefab);
-            float facing = txrng_rangef(0.0f, TX_PI * 2.0f);
-            vec2 dir = rnd_dir();
-            dir = vec2_scale(dir, 0.1f);
-            ecs_set(world, invader, Position, {.x = x + dir.x, .y = y + dir.y});
-            ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
-            ecs_set(world, invader, Target, {.x = x, .y = y});
-            ecs_set(world, invader, Facing, {facing});
+            ecs_set(world, invader, Position, {.x = 0.0f, .y = 0.0f});
+            ecs_set(world, invader, InvaderPosition, {.x = x, .y = y});
+            ++invader_ct;
         }
     }
+
+    ecs_set(
+        world,
+        InvaderControl,
+        InvaderControlContext,
+        {
+            .q_invaders = ecs_query_new(world, "game.comp.Position, InvaderPosition"),
+            .spacing = {.x = 1.75f, .y = 1.25f},
+            .move_dir = 1,
+            .invader_total = invader_ct,
+            .invader_count = invader_ct,
+            .min_speed = 0.5f,
+            .max_speed = 4.0f,
+            .step_dist = 0.4f,
+        });
 
     ECS_PREFAB(world, TankProjectilePrefab, Projectile, BoxCollider, Friendly);
     ecs_set(world, TankProjectilePrefab, BoxCollider, {.size = {.x = 0.125f, .y = 0.25f}});
@@ -226,8 +281,8 @@ int main(int argc, char* argv[])
             .name = "Tank",
             .shortcut =
                 {
-                    .key = TXINP_KEY_T,
                     .mod = TXINP_MOD_SHIFT,
+                    .key = TXINP_KEY_T,
                 },
             .window_fn = tank_debug_gui,
             .ctx =
@@ -235,6 +290,26 @@ int main(int argc, char* argv[])
                     .e_tank = Tank,
                 },
             .ctx_size = sizeof(tank_debug_context),
+        });
+
+    ECS_ENTITY(world, InvaderControlDebugGui, debug.gui.Window);
+    ecs_set(
+        world,
+        InvaderControlDebugGui,
+        DebugWindow,
+        {
+            .name = "Invader Control",
+            .shortcut =
+                {
+                    .mod = TXINP_MOD_SHIFT,
+                    .key = TXINP_KEY_I,
+                },
+            .window_fn = invader_control_debug_gui,
+            .ctx =
+                &(invader_control_debug_context){
+                    .e_control = InvaderControl,
+                },
+            .ctx_size = sizeof(invader_control_debug_context),
         });
 
     while (ecs_progress(world, 0.0f)) {
@@ -253,52 +328,50 @@ int main(int argc, char* argv[])
 
 void InvaderControl(ecs_iter_t* it)
 {
-    Position* position = ecs_term(it, Position, 1);
-    Velocity* velocity = ecs_term(it, Velocity, 2);
-    Target* target = ecs_term(it, Target, 3);
-    Facing* facing = ecs_term(it, Facing, 4);
+    InvaderControlContext* context = ecs_term(it, InvaderControlContext, 1);
+    Position* root = ecs_term(it, Position, 2);
 
-    for (int i = 0; i < it->count; ++i) {
-        vec2 delta = vec2_sub(target[i], position[i]);
-        vec2 normDir = vec2_norm(delta);
-        float dist = vec2_len(delta);
-        float targetFacing = atan2f(normDir.y, normDir.x);
-        facing[i].pos = smooth_damp_angle(
-            facing[i].pos,
-            targetFacing,
-            &facing[i].vel,
-            0.25f,
-            INFINITY,
-            it->delta_time); // facing[i].pos = lerpf(facing[i], targetFacing, 0.1f);
-        float accel = 1.0f;
+    float speed = lerpf(
+        context->max_speed,
+        context->min_speed,
+        (float)context->invader_count / context->invader_total);
 
-        vec2 dir = (vec2){.x = cosf(facing[i].pos), .y = sinf(facing[i].pos)};
+    *root = vec2_add(*root, (vec2){.x = speed * context->move_dir * it->delta_time});
 
-        draw_line_col2(
-            position[i],
-            vec2_add(position[i], vec2_scale(dir, 2.0f)),
-            k_color_azure,
-            k_color_chartreuse);
+    float bounds[4] = {INFINITY, -INFINITY, INFINITY, -INFINITY};
 
-        draw_line_col2(
-            position[i],
-            vec2_add(position[i], vec2_scale(normDir, 2.0f)),
-            k_color_rose,
-            k_color_violet);
+    context->invader_count = 0;
 
-        // if (vec2_len(velocity[i]) > 0.0f) {
-        //     vec2 normVel = vec2_norm(velocity[i]);
-        //     if (vec2_dot(dir, normVel) < 0.0f && dist > 1.0f) {
-        //         accel *= 2.0f;
-        //     }
-        // }
+    ecs_iter_t qit = ecs_query_iter(context->q_invaders);
+    while (ecs_query_next(&qit)) {
+        Position* pos = ecs_term(&qit, Position, 1);
+        InvaderPosition* ipos = ecs_term(&qit, InvaderPosition, 2);
+        for (int32_t i = 0; i < qit.count; ++i) {
+            vec2 local = (vec2){
+                .x = context->spacing.x * ipos[i].x,
+                .y = context->spacing.y * ipos[i].y,
+            };
 
-        vec2 vel = vec2_add(velocity[i], vec2_scale(dir, it->delta_time * accel));
-        if (vec2_len(vel) > 25.0f) {
-            vel = vec2_scale(vec2_norm(vel), 25.0f);
+            pos[i] = vec2_add(*root, local);
+
+            if (pos[i].x < bounds[0]) bounds[0] = pos[i].x;
+            if (pos[i].x > bounds[1]) bounds[1] = pos[i].x;
+            if (pos[i].y < bounds[2]) bounds[2] = pos[i].y;
+            if (pos[i].y > bounds[3]) bounds[3] = pos[i].y;
+
+            ++context->invader_count;
         }
+    }
 
-        velocity[i] = vel;
+    bool change_dir = false;
+    if ((context->move_dir > 0 && bounds[1] > 15.0f)
+        || (context->move_dir < 0 && bounds[0] < -15.0f)) {
+        change_dir = true;
+    }
+
+    if (change_dir) {
+        context->move_dir *= -1;
+        root->y += context->step_dist;
     }
 }
 
