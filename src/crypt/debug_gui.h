@@ -7,6 +7,7 @@ typedef void (*debug_window_fn_t)(ecs_world_t* world, void* ctx);
 
 typedef struct DebugWindow {
     const char* name;
+    const char* shortcut_str;
     struct {
         txinp_key key;
         txinp_mod mod;
@@ -25,3 +26,17 @@ typedef struct DebugGui {
 void DebugGuiImport(ecs_world_t* world);
 
 #define DebugGuiImportHandles(handles) ECS_IMPORT_COMPONENT(handles, DebugWindow);
+
+#define DEBUG_PANEL(world, entity, shortcut, func, ctx_type, context)                              \
+    ECS_ENTITY(world, entity##DebugGui, debug.gui.Window);                                         \
+    ecs_set(                                                                                       \
+        world,                                                                                     \
+        entity##DebugGui,                                                                          \
+        DebugWindow,                                                                               \
+        {                                                                                          \
+            .name = #entity,                                                                       \
+            .window_fn = func,                                                                     \
+            .shortcut_str = shortcut,                                                              \
+            .ctx = &(ctx_type)context,                                                             \
+            .ctx_size = sizeof(ctx_type),                                                          \
+        });

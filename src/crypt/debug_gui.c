@@ -135,6 +135,9 @@ static void StoreDebugWindowContext(ecs_iter_t* it)
 
     for (int32_t i = 0; i < it->count; ++i) {
         window[i].ctx = store_context(window[i].ctx, window[i].ctx_size);
+
+        txinp_parse_shortcut_str(
+            window[i].shortcut_str, &window[i].shortcut.mod, &window[i].shortcut.key);
     }
 }
 

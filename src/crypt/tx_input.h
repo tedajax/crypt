@@ -3,6 +3,13 @@
 #include "stb_ds.h"
 #include "strhash.h"
 #include "tx_types.h"
+#include <string.h>
+
+#ifdef _MSC_VER
+// not #if defined(_WIN32) || defined(_WIN64) because we have strncasecmp in mingw
+#define strncasecmp _strnicmp
+#define strcasecmp _stricmp
+#endif
 
 // just copied from SDL2 SDL_Scancode
 // will probably rename and adjust later but it's a good starting point
@@ -403,7 +410,27 @@ txinp_mod txinp_mods_down(txinp_mod mod);
 // snprintf style s and n parameters and return value
 int32_t txinp_write_mod_strn(txinp_mod mod, const char* key_name, char* s, size_t n);
 
+bool txinp_parse_shortcut_str(const char* shortcut, txinp_mod* mod, txinp_key* key);
+
 #if defined(TX_INPUT_IMPLEMENTATION)
+
+const char* key_names[] = {
+    "",        "",         "",          "",         "a",      "b",        "c",          "d",
+    "e",       "f",        "g",         "h",        "i",      "j",        "k",          "l",
+    "m",       "n",        "o",         "p",        "q",      "r",        "s",          "t",
+    "u",       "v",        "w",         "x",        "y",      "z",        "1",          "2",
+    "3",       "4",        "5",         "6",        "7",      "8",        "9",          "0",
+    "enter",   "esc",      "backspace", "tab",      "space",  "-",        "=",          "[",
+    "]",       "\\",       "",          ";",        "\'",     "`",        ",",          ".",
+    "/",       "capslock", "f1",        "f2",       "f3",     "f4",       "f5",         "f6",
+    "f7",      "f8",       "f9",        "f10",      "f12",    "prntscrn", "scrolllock", "pause",
+    "insert",  "home",     "pageup",    "pagedown", "right",  "left",     "down",       "up",
+    "numlock", "num/",     "num*",      "num-",     "numadd", "numenter", "num1",       "num2",
+    "num3",    "num4",     "num5",      "num6",     "num7",   "num8",     "num9",       "num0",
+    "num.",
+};
+
+const size_t key_name_count = sizeof(key_names) / sizeof(key_names[0]);
 
 #define TXINP_VALID_KEY(key) (((uint32_t)(key)) < TXINP_KEY_COUNT)
 
@@ -450,8 +477,10 @@ txinp_mod mod_from_key(uint8_t key)
     return mods[key & 0x7];
 }
 
-const char* txinp_mod_names[] = {"", "ctrl+", "shift+", "alt+", "super+"};
-const int txinp_mod_lens[] = {0, 5, 6, 4, 6};
+const txinp_mod txinp_mods_by_name_idx[] =
+    {TXINP_MOD_NONE, TXINP_MOD_CTRL, TXINP_MOD_SHIFT, TXINP_MOD_ALT, TXINP_MOD_SUPER};
+const char* txinp_mod_names[] = {"", "ctrl", "shift", "alt", "super"};
+const int txinp_mod_lens[] = {0, 4, 5, 3, 5};
 
 void txinp_on_key_event(txinp_event_key key_event)
 {
@@ -489,6 +518,76 @@ bool txinp_get_key_up(txinp_key key)
     return txinp_state[TXINP_PREV].keys[key] && !txinp_state[TXINP_CURR].keys[key];
 }
 
+// parse "shift", "ctrl", "alt", or "super" ignoring case
+bool txinp_parse_mod_str(const char* mod_str, txinp_mod* mod)
+{
+    for (int i = 1; i <= 4; ++i) {
+        if (strncasecmp(mod_str, txinp_mod_names[i], txinp_mod_lens[i]) == 0) {
+            if (mod) {
+                *mod = txinp_mods_by_name_idx[i];
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool txinp_parse_key_str(const char* key_str, txinp_key* key)
+{
+    for (size_t i = 0; i < key_name_count; ++i) {
+        if (strcasecmp(key_names[i], key_str) == 0) {
+            if (key) {
+                *key = (txinp_key)i;
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool txinp_parse_shortcut_str(const char* shortcut, txinp_mod* mod, txinp_key* key)
+{
+    if (!shortcut) {
+        return false;
+    }
+
+    bool ret = false;
+
+    size_t len = strlen(shortcut) + 1;
+    char* buffer = calloc(len, sizeof(char));
+
+    if (!buffer) {
+        return false;
+    }
+
+    strcpy(buffer, shortcut);
+
+    txinp_mod curr_mod = TXINP_MOD_NONE;
+    txinp_key curr_key = TXINP_KEY_UNKNOWN;
+
+    const char* delim = "+";
+    char* token = strtok(buffer, delim);
+    while (token) {
+        txinp_mod m;
+        if (txinp_parse_mod_str(token, &m)) {
+            curr_mod |= m;
+        } else if (txinp_parse_key_str(token, &curr_key)) {
+            ret = true;
+            goto done;
+        }
+        token = strtok(NULL, delim);
+    }
+
+done:
+    if (mod) *mod = curr_mod;
+    if (key) *key = curr_key;
+
+    free(buffer);
+    return ret;
+}
+
 int32_t txinp_write_mod_strn(txinp_mod mod, const char* key_name, char* s, size_t n)
 {
     TX_ASSERT(key_name);
@@ -497,7 +596,7 @@ int32_t txinp_write_mod_strn(txinp_mod mod, const char* key_name, char* s, size_
     int32_t needed = 0;
     for (int i = 0; i < 4; ++i) {
         if ((mod & (1 << i)) != 0) {
-            needed += txinp_mod_lens[i + 1];
+            needed += txinp_mod_lens[i + 1] + 1;
         }
     }
     needed += (int32_t)strlen(key_name);
@@ -510,6 +609,7 @@ int32_t txinp_write_mod_strn(txinp_mod mod, const char* key_name, char* s, size_
     for (int i = 0; i < 4; ++i) {
         if ((mod & (1 << i)) != 0) {
             cur = strcpy(cur, txinp_mod_names[i + 1]) + txinp_mod_lens[i + 1];
+            cur = strcpy(cur, "+");
         }
     }
     strcpy(cur, key_name);

@@ -272,55 +272,16 @@ int main(int argc, char* argv[])
 
     ecs_set(world, TankControl, TankControlContext, {.bullet_prefab = TankProjectilePrefab});
 
-    ECS_ENTITY(world, TankDebugGui, debug.gui.Window);
-    ecs_set(
+    DEBUG_PANEL(world, Tank, "shift+t", tank_debug_gui, tank_debug_context, {.e_tank = Tank});
+    DEBUG_PANEL(
         world,
-        TankDebugGui,
-        DebugWindow,
-        {
-            .name = "Tank",
-            .shortcut =
-                {
-                    .mod = TXINP_MOD_SHIFT,
-                    .key = TXINP_KEY_T,
-                },
-            .window_fn = tank_debug_gui,
-            .ctx =
-                &(tank_debug_context){
-                    .e_tank = Tank,
-                },
-            .ctx_size = sizeof(tank_debug_context),
-        });
-
-    ECS_ENTITY(world, InvaderControlDebugGui, debug.gui.Window);
-    ecs_set(
-        world,
-        InvaderControlDebugGui,
-        DebugWindow,
-        {
-            .name = "Invader Control",
-            .shortcut =
-                {
-                    .mod = TXINP_MOD_SHIFT,
-                    .key = TXINP_KEY_I,
-                },
-            .window_fn = invader_control_debug_gui,
-            .ctx =
-                &(invader_control_debug_context){
-                    .e_control = InvaderControl,
-                },
-            .ctx_size = sizeof(invader_control_debug_context),
-        });
+        InvaderControl,
+        "shift+i",
+        invader_control_debug_gui,
+        invader_control_debug_context,
+        {.e_control = InvaderControl});
 
     while (ecs_progress(world, 0.0f)) {
-
-        if (txinp_get_key_down(TXINP_KEY_I)) {
-            ecs_entity_t invader = ecs_new_w_pair(world, EcsIsA, InvaderPrefab);
-            ecs_set(
-                world, invader, Position, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 6)});
-            ecs_set(world, invader, Velocity, {.x = 0.0f, .y = 0.0f});
-            ecs_set(world, invader, Target, {.x = txrng_rangef(-16, 16), .y = txrng_rangef(-9, 6)});
-        }
     }
 
     return ecs_fini(world);
