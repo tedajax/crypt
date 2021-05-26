@@ -122,8 +122,12 @@ void debug_panel_gui(ecs_world_t* world, void* ctx)
             if (strcmp(window[i].name, "Debug Panel") == 0) {
                 continue;
             }
-            if (igButton(window[i].name, (ImVec2){120, 20})) {
-                window[i].is_visible = !window[i].is_visible;
+
+            {
+                char buf[256];
+                snprintf(buf, 256, "%s (%s)", window[i].name, window[i].shortcut_str);
+                if (igCheckbox(buf, &window[i].is_visible)) {
+                }
             }
         }
     }
