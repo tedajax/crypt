@@ -536,6 +536,19 @@ void draw_line(vec2 from, vec2 to)
     draw_line_col2(from, to, white, white);
 }
 
+void draw_point_col(vec2 p, vec4 col)
+{
+    Renderer* r = try_get_r();
+
+    if (!r) {
+        return;
+    }
+
+    float px = (1.0f / r->pixels_per_meter);
+    vec2 p2 = (vec2){.x = p.x + px, .y = p.y + px};
+    draw_rect_col(p, p2, col);
+}
+
 void draw_rect_col4(vec2 p0, vec2 p1, vec4 cols[4])
 {
     Renderer* r = try_get_r();

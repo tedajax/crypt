@@ -305,33 +305,35 @@ float smooth_damp(float from, float to, float* speed, float time, float max_spee
     // https://github.com/Unity-Technologies/UnityCsReference/blob/master/Runtime/Export/Mathf.cs
     // originally from Game Programming Gems 4 Chapter 1.10
 
-    float spd = (speed) ? *speed : 0.0f;
-
-    time = max(0.0001f, time);
-    float omega = 2.f / time;
+    // Based on Game Programming Gems 4 Chapter 1.10
+    time = max(0.0001F, time);
+    float omega = 2.0f / time;
 
     float x = omega * dt;
-    float exp = 1.f / (1.f + x + 0.48f * x * x + 0.235f * x * x * x);
-    float delta = to - from;
-    float origTo = to;
+    float exp = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+    float change = from - to;
+    float originalTo = to;
 
-    float maxDelta = max_speed * time;
-    delta = clampf(delta, -maxDelta, maxDelta);
-    to = from - delta;
+    // Clamp maximum speed
+    float maxChange = max_speed * time;
+    change = clampf(change, -maxChange, maxChange);
+    to = from - change;
 
-    float temp = (spd + omega * delta) * dt;
-    spd = (spd - omega * temp) * exp;
-    float ret = to + (delta + temp) * exp;
+    float velocity = (speed) ? *speed : 0.0f;
 
-    // prevent overshoots
-    if (origTo - from > 0.0f == ret > origTo) {
-        ret = origTo;
-        spd = (ret - origTo) / dt;
+    float temp = (velocity + omega * change) * dt;
+    velocity = (velocity - omega * temp) * exp;
+    float output = to + (change + temp) * exp;
+
+    // Prevent overshooting
+    if (originalTo - from > 0.0F == output > originalTo) {
+        output = originalTo;
+        velocity = (output - originalTo) / dt;
     }
 
-    if (speed) *speed = spd;
+    if (speed) *speed = velocity;
 
-    return ret;
+    return output;
 }
 
 float smooth_damp_angle(float from, float to, float* speed, float time, float max_speed, float dt)

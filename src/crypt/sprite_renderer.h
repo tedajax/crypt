@@ -9,6 +9,7 @@ void draw_line(vec2 from, vec2 to);
 void draw_line_col(vec2 from, vec2 to, vec4 col);
 void draw_line_col2(vec2 from, vec2 to, vec4 col0, vec4 col1);
 
+void draw_point_col(vec2 p, vec4 col);
 void draw_rect_col4(vec2 p0, vec2 p1, vec4 cols[4]);
 void draw_rect_col(vec2 p0, vec2 p1, vec4 col);
 void draw_vgrad(vec2 p0, vec2 p1, vec4 top, vec4 bot);
