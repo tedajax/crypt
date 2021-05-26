@@ -27,6 +27,19 @@ typedef struct TankConfig {
     float bounds_x;
 } TankConfig;
 
+typedef struct GunInput {
+    bool is_firing;
+} GunInput;
+
+typedef struct GunState {
+    float shot_timer;
+} GunState;
+
+typedef struct GunConfig {
+    ecs_entity_t projectile_prefab;
+    float shot_interval;
+} GunConfig;
+
 typedef struct BoxCollider {
     uint8_t layer; // TEMP
     vec2 size;
@@ -99,6 +112,8 @@ void ColliderView(ecs_iter_t* it);
 void CollisionTrigger(ecs_iter_t* it);
 void CreateColliderQueries(ecs_iter_t* it);
 void CheckColliderIntersections(ecs_iter_t* it);
+void TankGunControl(ecs_iter_t* it);
+void CopyExpireAfter(ecs_iter_t* it);
 
 vec2 rnd_dir()
 {
@@ -211,6 +226,9 @@ int main(int argc, char* argv[])
     ECS_COMPONENT_DEFINE(world, InvaderPosition);
     ECS_COMPONENT_DEFINE(world, InvadersConfig);
     ECS_COMPONENT_DEFINE(world, InvaderControlContext);
+    ECS_COMPONENT(world, GunConfig);
+    ECS_COMPONENT(world, GunState);
+    ECS_COMPONENT(world, GunInput);
 
     ECS_TAG_DEFINE(world, Projectile);
     ECS_TAG_DEFINE(world, Friendly);
@@ -231,6 +249,8 @@ int main(int argc, char* argv[])
     ECS_SYSTEM(world, ExpireAfterUpdate, EcsOnUpdate, ExpireAfter);
     // ECS_SYSTEM(world, CreateColliderQueries, EcsOnSet, ColliderQuery);
     ECS_SYSTEM(world, CheckColliderIntersections, EcsPostUpdate, game.comp.Position, SHARED:BoxCollider, SHARED:ColliderQuery);
+    ECS_SYSTEM(world, TankGunControl, EcsOnUpdate, PARENT:TankInput, GunConfig, GunState, PARENT:game.comp.Position, OWNED:game.comp.Position);
+    ECS_SYSTEM(world, CopyExpireAfter, EcsOnSet, SHARED:ExpireAfter);
     // clang-format on
 
     ECS_PREFAB(world, InvaderPrefab, sprite.renderer.Sprite, BoxCollider, Hostile);
@@ -280,14 +300,27 @@ int main(int argc, char* argv[])
         {.sprite_id = 0, .layer = 1.0f, .origin = (vec2){0.5f, 1.0f}, .width = 2, .height = 1});
     ecs_set(world, Tank, TankConfig, {.bounds_x = 16.0f});
 
-    ECS_PREFAB(world, TankProjectilePrefab, Projectile, BoxCollider, Friendly);
+    ECS_PREFAB(world, TankProjectilePrefab, Projectile, ExpireAfter, BoxCollider, Friendly);
     ecs_set(world, TankProjectilePrefab, BoxCollider, {.size = {.x = 0.125f, .y = 0.25f}});
+    ecs_set(world, TankProjectilePrefab, ExpireAfter, {.seconds = 1.0f});
 
     {
         ecs_query_t* query = ecs_query_new(
             world, "[in] game.comp.Position, [in] ANY:BoxCollider, !ANY:Friendly, ANY:Hostile");
         ecs_set(world, TankProjectilePrefab, ColliderQuery, {.q_targets = query});
     }
+
+    ECS_ENTITY(world, TankGun, CHILDOF | Tank, game.comp.Position, GunConfig, GunState);
+    ecs_set(
+        world,
+        TankGun,
+        GunConfig,
+        {
+            .projectile_prefab = TankProjectilePrefab,
+            .shot_interval = 0.15f,
+        });
+    ecs_set(world, TankGun, GunState, {0});
+    ecs_set(world, TankGun, Position, {0});
 
     ecs_set(world, TankControl, TankControlContext, {.bullet_prefab = TankProjectilePrefab});
 
@@ -418,7 +451,7 @@ void TankGatherInput(ecs_iter_t* it)
         if (txinp_get_key(TXINP_KEY_RIGHT)) move += 1.0f;
 
         input[i].move = move;
-        input[i].fire = txinp_get_key_down(TXINP_KEY_Z);
+        input[i].fire = txinp_get_key(TXINP_KEY_Z);
     }
 }
 
@@ -445,11 +478,35 @@ void TankControl(ecs_iter_t* it)
         position[i].x = clampf(position[i].x, -config->bounds_x + 0.9f, config->bounds_x - 0.9f);
 
         if (input[i].fire) {
-            ecs_entity_t projectile = ecs_new_w_pair(it->world, EcsIsA, context->bullet_prefab);
-            ecs_set(
-                it->world, projectile, Position, {.x = position[i].x, .y = position[i].y - 1.0f});
+        }
+    }
+}
+
+void TankGunControl(ecs_iter_t* it)
+{
+    TankInput* tank_input = ecs_term(it, TankInput, 1);
+    GunConfig* config = ecs_term(it, GunConfig, 2);
+    GunState* state = ecs_term(it, GunState, 3);
+    Position* tank_pos = ecs_term(it, Position, 4);
+    Position* gun_pos = ecs_term(it, Position, 5);
+
+    ECS_IMPORT(it->world, GameComp);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        if (state[i].shot_timer > 0.0f) {
+            state[i].shot_timer -= it->delta_time;
+        }
+
+        bool fire = tank_input[i].fire && state[i].shot_timer <= 0.0f;
+
+        if (fire) {
+            state[i].shot_timer += config[i].shot_interval;
+
+            vec2 pos = vec2_add(tank_pos[i], gun_pos[i]);
+
+            ecs_entity_t projectile = ecs_new_w_pair(it->world, EcsIsA, config->projectile_prefab);
+            ecs_set(it->world, projectile, Position, {.x = pos.x, .y = pos.y - 1.0f});
             ecs_set(it->world, projectile, Velocity, {.x = 0.0f, .y = -32.0f});
-            ecs_set(it->world, projectile, ExpireAfter, {.seconds = 1.0f});
         }
     }
 }
@@ -507,6 +564,15 @@ void ExpireAfterUpdate(ecs_iter_t* it)
         if (expire[i].seconds <= 0) {
             ecs_delete(it->world, it->entities[i]);
         }
+    }
+}
+
+void CopyExpireAfter(ecs_iter_t* it)
+{
+    ExpireAfter* shared = ecs_term(it, ExpireAfter, 1);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        ecs_set(it->world, it->entities[i], ExpireAfter, {.seconds = shared[i].seconds});
     }
 }
 
