@@ -51,8 +51,8 @@ typedef struct InvadersConfig {
     float min_speed;
     float max_speed;
     float step_dist;
-    int32_t num_invaders;
-    int32_t invaders_per_row;
+    int32_t invader_rows;
+    int32_t invader_cols;
 } InvadersConfig;
 
 typedef struct InvaderControlContext {
@@ -145,17 +145,25 @@ void invader_control_debug_gui(ecs_world_t* world, void* ctx)
         ecs_get(world, context->e_control, InvaderControlContext);
     InvadersConfig* config = ecs_get_mut(world, context->e_control, InvadersConfig, false);
 
+    bool needs_reset = false;
+
     if (igButton("RESET", (ImVec2){-1, 30})) {
+        needs_reset = true;
+    }
+
+    igLabelText("Alive", "%d", control->invaders_alive);
+    igLabelText("Total", "%d", config->invader_rows * config->invader_cols);
+    needs_reset |= igInputInt("Rows", &config->invader_rows, 1, 5, ImGuiInputTextFlags_None);
+    needs_reset |= igInputInt("Cols", &config->invader_cols, 1, 5, ImGuiInputTextFlags_None);
+    igInputFloat("Min Speed", &config->min_speed, 0.1f, 1.0f, "%.02f", ImGuiInputTextFlags_None);
+    igInputFloat("Max Speed", &config->max_speed, 0.1f, 1.0f, "%.02f", ImGuiInputTextFlags_None);
+    igInputFloat("Step Dist", &config->step_dist, 0.1f, 1.0f, "%.02f", ImGuiInputTextFlags_None);
+
+    if (needs_reset) {
         ecs_remove(world, context->e_control, InvadersConfig);
         ecs_set_id(
             world, context->e_control, ecs_id(InvadersConfig), sizeof(InvadersConfig), config);
     }
-
-    igLabelText("Alive", "%d", control->invaders_alive);
-    igLabelText("Total", "%d", config->num_invaders);
-    igInputFloat("Min Speed", &config->min_speed, 0.1f, 1.0f, "%.02f", ImGuiInputTextFlags_None);
-    igInputFloat("Max Speed", &config->max_speed, 0.1f, 1.0f, "%.02f", ImGuiInputTextFlags_None);
-    igInputFloat("Step Dist", &config->step_dist, 0.1f, 1.0f, "%.02f", ImGuiInputTextFlags_None);
 }
 
 int main(int argc, char* argv[])
@@ -250,8 +258,8 @@ int main(int argc, char* argv[])
             .max_speed = 16.0f,
             .step_dist = 0.25f,
             .spacing = {.x = 1.75f, .y = 1.25f},
-            .num_invaders = 84,
-            .invaders_per_row = 14,
+            .invader_rows = 6,
+            .invader_cols = 14,
         });
 
     ECS_ENTITY(
@@ -283,11 +291,11 @@ int main(int argc, char* argv[])
 
     ecs_set(world, TankControl, TankControlContext, {.bullet_prefab = TankProjectilePrefab});
 
-    DEBUG_PANEL(world, Tank, "shift+t", tank_debug_gui, tank_debug_context, {.e_tank = Tank});
+    DEBUG_PANEL(world, Tank, "shift+1", tank_debug_gui, tank_debug_context, {.e_tank = Tank});
     DEBUG_PANEL(
         world,
         InvaderControl,
-        "shift+i",
+        "shift+2",
         invader_control_debug_gui,
         invader_control_debug_context,
         {.e_control = InvaderControl});
@@ -312,7 +320,8 @@ void InvaderControl(ecs_iter_t* it)
         }
     }
 
-    float invader_ratio = (float)num_alive_invaders / config->num_invaders;
+    int32_t num_invaders = config->invader_rows * config->invader_cols;
+    float invader_ratio = (float)num_alive_invaders / num_invaders;
     float speed = lerpf(config->max_speed, config->min_speed, invader_ratio);
 
     if (context->move_dir == 0.0f) {
@@ -385,9 +394,10 @@ void AddInvaders(ecs_iter_t* it)
     InvadersConfig* config = ecs_term(it, InvadersConfig, 2);
     Position* root = ecs_term(it, Position, 3);
 
-    for (int32_t i = 0; i < config->num_invaders; ++i) {
-        uint16_t row = i / config->invaders_per_row;
-        uint16_t col = i % config->invaders_per_row;
+    int32_t num_invaders = config->invader_cols * config->invader_rows;
+    for (int32_t i = 0; i < num_invaders; ++i) {
+        uint16_t row = i / config->invader_cols;
+        uint16_t col = i % config->invader_cols;
 
         ecs_entity_t invader = ecs_new_w_pair(it->world, EcsIsA, config->invader_prefab);
         ecs_set(it->world, invader, Position, {.x = 0.0f, .y = 0.0f});
