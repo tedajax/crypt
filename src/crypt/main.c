@@ -1,6 +1,7 @@
 #include "color.h"
 #include "debug_gui.h"
 #include "game_components.h"
+#include "physics.h"
 #include "sprite_renderer.h"
 #include "strhash.h"
 #include "system_imgui.h"
@@ -43,16 +44,6 @@ typedef struct GunConfig {
     ecs_entity_t projectile_prefab;
     float shot_interval;
 } GunConfig;
-
-typedef struct BoxCollider {
-    uint8_t layer; // TEMP
-    vec2 size;
-} BoxCollider;
-
-typedef struct ColliderQuery {
-    const char* expr;
-    ecs_query_t* q_targets;
-} ColliderQuery;
 
 typedef struct ExpireAfter {
     float seconds;
@@ -105,7 +96,6 @@ typedef struct Damage {
 
 ECS_COMPONENT_DECLARE(Target);
 ECS_COMPONENT_DECLARE(Bounds);
-ECS_COMPONENT_DECLARE(BoxCollider);
 ECS_COMPONENT_DECLARE(ExpireAfter);
 ECS_COMPONENT_DECLARE(TankConfig);
 ECS_COMPONENT_DECLARE(InvadersConfig);
@@ -129,10 +119,6 @@ void TankGatherInput(ecs_iter_t* it);
 void TankControl(ecs_iter_t* it);
 void Move(ecs_iter_t* it);
 void ExpireAfterUpdate(ecs_iter_t* it);
-void ColliderView(ecs_iter_t* it);
-void CollisionTrigger(ecs_iter_t* it);
-void CreateColliderQueries(ecs_iter_t* it);
-void CheckColliderIntersections(ecs_iter_t* it);
 void TankGunControl(ecs_iter_t* it);
 void CopyExpireAfter(ecs_iter_t* it);
 void UpdateBounds(ecs_iter_t* it);
@@ -219,8 +205,9 @@ int main(int argc, char* argv[])
     ECS_IMPORT(world, GameComp);
     ECS_IMPORT(world, SystemSdl2);
     ECS_IMPORT(world, SystemImgui);
-    ECS_IMPORT(world, SpriteRenderer);
     ECS_IMPORT(world, DebugGui);
+    ECS_IMPORT(world, SpriteRenderer);
+    ECS_IMPORT(world, Physics);
 
     ECS_ENTITY(world, Root, system.sdl2.WindowConfig);
 
@@ -246,9 +233,7 @@ int main(int argc, char* argv[])
     ECS_COMPONENT(world, TankInput);
     ECS_COMPONENT_DEFINE(world, TankConfig);
     ECS_COMPONENT(world, TankControlContext);
-    ECS_COMPONENT_DEFINE(world, BoxCollider);
     ECS_COMPONENT_DEFINE(world, ExpireAfter);
-    ECS_COMPONENT(world, ColliderQuery);
     ECS_COMPONENT_DEFINE(world, InvaderPosition);
     ECS_COMPONENT_DEFINE(world, InvaderTarget);
     ECS_COMPONENT_DEFINE(world, InvadersConfig);
@@ -276,10 +261,7 @@ int main(int argc, char* argv[])
     ECS_SYSTEM(world, AddInvaders, EcsOnSet, InvaderControlContext, InvadersConfig, InvaderRoot:game.comp.Position);
     ECS_SYSTEM(world, RemoveInvaders, EcsUnSet, InvaderControlContext, InvadersConfig);
     ECS_SYSTEM(world, Move, EcsOnUpdate, game.comp.Position, game.comp.Velocity, !NoAutoMove);
-    ECS_SYSTEM(world, ColliderView, EcsPostUpdate, game.comp.Position, ANY:BoxCollider);
     ECS_SYSTEM(world, ExpireAfterUpdate, EcsOnUpdate, ExpireAfter);
-    // ECS_SYSTEM(world, CreateColliderQueries, EcsOnSet, ColliderQuery);
-    ECS_SYSTEM(world, CheckColliderIntersections, EcsPostUpdate, game.comp.Position, SHARED:BoxCollider, SHARED:ColliderQuery);
     ECS_SYSTEM(world, TankGunControl, EcsOnUpdate, PARENT:TankInput, GunConfig, GunState, PARENT:game.comp.Position, OWNED:game.comp.Position);
     ECS_SYSTEM(world, UpdateBounds, EcsPostUpdate, game.comp.Position, Bounds);
 
@@ -288,7 +270,8 @@ int main(int argc, char* argv[])
     ECS_TRIGGER(world, OnInvaderRemoved, EcsOnRemove, InvaderTarget);
     // clang-format on
 
-    ECS_PREFAB(world, InvaderPrefab, sprite.renderer.Sprite, BoxCollider, Hostile, NoAutoMove);
+    ECS_PREFAB(
+        world, InvaderPrefab, sprite.renderer.Sprite, physics.BoxCollider, Hostile, NoAutoMove);
     ecs_set(
         world,
         InvaderPrefab,
@@ -336,13 +319,14 @@ int main(int argc, char* argv[])
         {.sprite_id = 0, .layer = 1.0f, .origin = (vec2){0.5f, 1.0f}, .width = 2, .height = 1});
     ecs_set(world, Tank, TankConfig, {.bounds_x = 16.0f});
 
-    ECS_PREFAB(world, TankProjectilePrefab, Projectile, ExpireAfter, BoxCollider, Friendly);
+    ECS_PREFAB(world, TankProjectilePrefab, Projectile, ExpireAfter, physics.BoxCollider, Friendly);
     ecs_set(world, TankProjectilePrefab, BoxCollider, {.size = {.x = 0.125f, .y = 0.25f}});
     ecs_set(world, TankProjectilePrefab, ExpireAfter, {.seconds = 1.0f});
 
     {
         ecs_query_t* query = ecs_query_new(
-            world, "[in] game.comp.Position, [in] ANY:BoxCollider, !ANY:Friendly, ANY:Hostile");
+            world,
+            "[in] game.comp.Position, [in] ANY:physics.BoxCollider, !ANY:Friendly, ANY:Hostile");
         ecs_set(world, TankProjectilePrefab, ColliderQuery, {.q_targets = query});
     }
 
@@ -614,39 +598,6 @@ void Move(ecs_iter_t* it)
     }
 }
 
-void ColliderView(ecs_iter_t* it)
-{
-    Position* position = ecs_term(it, Position, 1);
-    BoxCollider* box = ecs_term(it, BoxCollider, 2);
-
-    vec4 cols[2] = {
-        (vec4){0.0f, 1.0f, 1.0f, 1.0f},
-        (vec4){1.0f, 0.0f, 1.0f, 1.0f},
-    };
-
-    if (ecs_is_owned(it, 2)) {
-        for (int32_t i = 0; i < it->count; ++i) {
-            vec2 size = box[i].size;
-            uint8_t layer = box[i].layer;
-
-            vec2 p0 = vec2_sub(position[i], size);
-            vec2 p1 = vec2_add(position[i], size);
-
-            draw_line_rect_col(p0, p1, cols[layer]);
-        }
-    } else {
-        for (int32_t i = 0; i < it->count; ++i) {
-            vec2 size = box->size;
-            uint8_t layer = box->layer;
-
-            vec2 p0 = vec2_sub(position[i], size);
-            vec2 p1 = vec2_add(position[i], size);
-
-            draw_line_rect_col(p0, p1, cols[layer]);
-        }
-    }
-}
-
 void ExpireAfterUpdate(ecs_iter_t* it)
 {
     ExpireAfter* expire = ecs_term(it, ExpireAfter, 1);
@@ -665,75 +616,6 @@ void CopyExpireAfter(ecs_iter_t* it)
 
     for (int32_t i = 0; i < it->count; ++i) {
         ecs_set(it->world, it->entities[i], ExpireAfter, {.seconds = shared[i].seconds});
-    }
-}
-
-static const char* kColliderQueryExpr = "[in] game.comp.Position, [in] ANY:BoxCollider,";
-
-void CreateColliderQueries(ecs_iter_t* it)
-{
-    ColliderQuery* query = ecs_term(it, ColliderQuery, 1);
-
-    if (ecs_is_owned(it, 1)) {
-        char sig[512];
-
-        for (int32_t i = 0; i < it->count; ++i) {
-            snprintf(sig, 512, "%s %s", kColliderQueryExpr, query[i].expr);
-            query[i].q_targets = ecs_query_new(it->world, sig);
-        }
-    } else {
-        char sig[512];
-        snprintf(sig, 512, "%s %s", kColliderQueryExpr, query->expr);
-        query->q_targets = ecs_query_new(it->world, sig);
-    }
-}
-
-struct world_rect {
-    float left, top, right, bottom;
-};
-
-bool world_rect_overlap(const struct world_rect* a, const struct world_rect* b)
-{
-    return a->left <= b->right && a->right >= b->left && a->top >= b->bottom && a->bottom <= b->top;
-}
-
-void box_to_world_rect(vec2 center, vec2 size, struct world_rect* out)
-{
-    out->left = center.x - size.x;
-    out->right = center.x + size.x;
-    out->bottom = center.y - size.y;
-    out->top = center.y + size.y;
-}
-
-void CheckColliderIntersections(ecs_iter_t* it)
-{
-    Position* position = ecs_term(it, Position, 1);
-    BoxCollider* box = ecs_term(it, BoxCollider, 2);
-    ColliderQuery* query = ecs_term(it, ColliderQuery, 3);
-
-    for (int32_t i = 0; i < it->count; ++i) {
-        struct world_rect r0;
-        box_to_world_rect(position[i], box->size, &r0);
-
-        ecs_iter_t qit = ecs_query_iter(query->q_targets);
-        while (ecs_query_next(&qit)) {
-            for (int32_t j = 0; j < qit.count; ++j) {
-                Position* targ_pos = ecs_term(&qit, Position, 1);
-                BoxCollider* targ_box = ecs_term(&qit, BoxCollider, 2);
-
-                struct world_rect r1;
-                if (ecs_is_owned(&qit, 2)) {
-                    box_to_world_rect(targ_pos[j], targ_box[j].size, &r1);
-                } else {
-                    box_to_world_rect(targ_pos[j], targ_box->size, &r1);
-                }
-
-                if (world_rect_overlap(&r0, &r1)) {
-                    ecs_delete(it->world, it->entities[i]);
-                    ecs_delete(it->world, qit.entities[j]);
-                }
-            }
-        }
     }
 }
 
