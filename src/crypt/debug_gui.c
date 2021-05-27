@@ -1,4 +1,5 @@
 #include "debug_gui.h"
+#include "game_components.h"
 #include "stb_ds.h"
 #include "strhash.h"
 #include "system_imgui.h"
@@ -110,27 +111,37 @@ void debug_panel_gui(ecs_world_t* world, void* ctx)
 {
     debug_panel_context* context = (debug_panel_context*)ctx;
 
-    if (!context->q_debug_windows) {
-        return;
-    }
+    ecs_world_stats_t stats;
+    ecs_get_world_stats(world, &stats);
 
-    ecs_iter_t it = ecs_query_iter(context->q_debug_windows);
+    ECS_IMPORT(world, GameComp);
 
-    while (ecs_query_next(&it)) {
-        DebugWindow* window = ecs_term(&it, DebugWindow, 1);
-        for (int32_t i = 0; i < it.count; ++i) {
-            if (strcmp(window[i].name, "Debug Panel") == 0) {
-                continue;
-            }
+    igLabelText("Entity Count", "%d", ecs_count(world, Position));
 
-            {
-                char buf[256];
-                snprintf(buf, 256, "%s (%s)", window[i].name, window[i].shortcut_str);
-                if (igCheckbox(buf, &window[i].is_visible)) {
+    igBeginChildEx("Panels", 42, (ImVec2){-1, -1}, true, ImGuiWindowFlags_None);
+    {
+        if (!context->q_debug_windows) {
+            return;
+        }
+
+        ecs_iter_t it = ecs_query_iter(context->q_debug_windows);
+        while (ecs_query_next(&it)) {
+            DebugWindow* window = ecs_term(&it, DebugWindow, 1);
+            for (int32_t i = 0; i < it.count; ++i) {
+                if (strcmp(window[i].name, "Debug Panel") == 0) {
+                    continue;
+                }
+
+                {
+                    char buf[256];
+                    snprintf(buf, 256, "%s (%s)", window[i].name, window[i].shortcut_str);
+                    if (igCheckbox(buf, &window[i].is_visible)) {
+                    }
                 }
             }
         }
     }
+    igEndChild();
 }
 
 static void StoreDebugWindowContext(ecs_iter_t* it)
