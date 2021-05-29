@@ -378,7 +378,7 @@ int main(int argc, char* argv[])
         GunConfig,
         {
             .projectile_prefab = TankProjectilePrefab,
-            .shot_interval = 0.15f,
+            .shot_interval = 0.08f,
         });
     ecs_set(world, TankGun, GunState, {0});
     ecs_set(world, TankGun, Position, {0, -1});
@@ -554,7 +554,8 @@ void AddInvaders(ecs_iter_t* it)
         ecs_set(it->world, invader, InvaderTarget, {.target_ent = invader_target});
         ecs_set_ptr(it->world, invader, Position, &world_pos);
         ecs_set(it->world, invader, Velocity, {0});
-        ecs_set(it->world, invader, InvaderConfig, {.smooth = 0.025f * i});
+
+        ecs_set(it->world, invader, InvaderConfig, {.smooth = txrng_rangef(0.05f, 0.5f)});
         ecs_set_trait(it->world, invader, PhysBox, PhysCollider, {.layer = 1});
     }
 }
@@ -700,8 +701,8 @@ void UpdateBounds(ecs_iter_t* it)
             }
         }
 
-        draw_line_rect_col(
-            (vec2){bounds[i].l, bounds[i].t}, (vec2){bounds[i].r, bounds[i].b}, k_color_orange);
+        // draw_line_rect_col(
+        //     (vec2){bounds[i].l, bounds[i].t}, (vec2){bounds[i].r, bounds[i].b}, k_color_orange);
     }
 }
 
@@ -716,12 +717,17 @@ void OnInvaderRemoved(ecs_iter_t* it)
 
 void ApplyDamage(ecs_iter_t* it)
 {
+    ECS_IMPORT(it->world, SpriteRenderer);
+
     Health* health = ecs_term(it, Health, 1);
     Damage* damage = ecs_term(it, Damage, 2);
 
     for (int32_t i = 0; i < it->count; ++i) {
         health[i].value -= damage[i].amount;
         ecs_remove(it->world, it->entities[i], Damage);
+
+        ecs_set(it->world, it->entities[i], SpriteColor, {k_color_white});
+        ecs_set_trait(it->world, it->entities[i], SpriteColor, ExpireAfter, {.seconds = 1 / 15.0f});
 
         if (health[i].value <= 0) {
             ecs_delete(it->world, it->entities[i]);

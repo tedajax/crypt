@@ -12,6 +12,7 @@ inline vec4 color_rgb(float r, float g, float b)
     return (vec4){r, g, b};
 }
 
+static const vec4 k_color_clear = {1, 1, 1, 0};
 static const vec4 k_color_white = {1, 1, 1, 1};
 static const vec4 k_color_grey_light = {0.75f, 0.75f, 0.75f, 1};
 static const vec4 k_color_grey = {0.5f, 0.5f, 0.5f, 1};

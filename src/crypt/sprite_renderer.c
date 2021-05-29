@@ -15,6 +15,7 @@ struct sprite {
     vec4 rect;
     vec2 origin;
     vec2 scale;
+    vec4 color;
 };
 
 struct vertex {
@@ -332,6 +333,12 @@ renderer_resources init_renderer_resources(
                             {
                                 .format = SG_VERTEXFORMAT_FLOAT2,
                                 .offset = 36,
+                                .buffer_index = 1,
+                            },
+                        [6] =
+                            {
+                                .format = SG_VERTEXFORMAT_FLOAT4,
+                                .offset = 44,
                                 .buffer_index = 1,
                             },
                     },
@@ -742,6 +749,7 @@ void GatherSprites(ecs_iter_t* it)
 
     Position* pos = ecs_term(it, Position, 1);
     Sprite* spr = ecs_term(it, Sprite, 2);
+    SpriteColor* col = ecs_term(it, SpriteColor, 3);
 
     if (ecs_is_owned(it, 2)) {
         for (int32_t i = 0; i < it->count; ++i) {
@@ -754,6 +762,11 @@ void GatherSprites(ecs_iter_t* it)
 
             vec3 position = (vec3){.x = pos[i].x, .y = pos[i].y, .z = -layer};
 
+            vec4 color = k_color_clear;
+            if (col) {
+                color = col[i].color;
+            }
+
             arrpush(
                 r->sprites,
                 ((struct sprite){
@@ -761,6 +774,7 @@ void GatherSprites(ecs_iter_t* it)
                     .rect = spr_calc_rect(sprite_id, flags, swidth, sheight),
                     .scale = {.x = (float)swidth, .y = (float)sheight},
                     .origin = origin,
+                    .color = color,
                 }));
         }
     } else {
@@ -774,6 +788,11 @@ void GatherSprites(ecs_iter_t* it)
         for (int32_t i = 0; i < it->count; ++i) {
             vec3 position = (vec3){.x = pos[i].x, .y = pos[i].y, .z = -layer};
 
+            vec4 color = k_color_clear;
+            if (col) {
+                color = col[i].color;
+            }
+
             arrpush(
                 r->sprites,
                 ((struct sprite){
@@ -781,6 +800,7 @@ void GatherSprites(ecs_iter_t* it)
                     .rect = spr_calc_rect(sprite_id, flags, swidth, sheight),
                     .scale = {.x = (float)swidth, .y = (float)sheight},
                     .origin = origin,
+                    .color = color,
                 }));
         }
     }
@@ -919,7 +939,8 @@ void SpriteRendererImport(ecs_world_t* world)
 
     ECS_IMPORT(world, GameComp);
 
-    ECS_COMPONENT_DEFINE(world, Sprite);
+    ECS_COMPONENT(world, Sprite);
+    ECS_COMPONENT(world, SpriteColor);
     ECS_COMPONENT(world, SpriteRenderConfig);
 
     ECS_COMPONENT(world, Renderer);
@@ -931,7 +952,7 @@ void SpriteRendererImport(ecs_world_t* world)
     ECS_SYSTEM(world, DetachRenderer, EcsUnSet, Renderer);
 
     ECS_SYSTEM(world, RendererNewFrame, EcsPostLoad, Renderer);
-    ECS_SYSTEM(world, GatherSprites, EcsPreStore, game.comp.Position, ANY:Sprite);
+    ECS_SYSTEM(world, GatherSprites, EcsPreStore, game.comp.Position, ANY:Sprite, ?OWNED:SpriteColor);
     ECS_SYSTEM(world, Render, EcsOnStore, Renderer);
 
     ECS_SYSTEM(world, FixupSpriteSize, EcsOnSet, Sprite)
@@ -940,5 +961,6 @@ void SpriteRendererImport(ecs_world_t* world)
     q_renderer = ecs_query_new(world, "$sprite.renderer.Renderer");
 
     ECS_EXPORT_COMPONENT(Sprite);
+    ECS_EXPORT_COMPONENT(SpriteColor);
     ECS_EXPORT_COMPONENT(SpriteRenderConfig);
 }
