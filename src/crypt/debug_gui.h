@@ -27,7 +27,7 @@ void DebugGuiImport(ecs_world_t* world);
 
 #define DebugGuiImportHandles(handles) ECS_IMPORT_COMPONENT(handles, DebugWindow);
 
-#define DEBUG_PANEL(world, entity, shortcut, func, ctx_type, context)                              \
+#define DEBUG_PANEL(world, entity, shortcut, func, ctx_type, ...)                                  \
     ECS_ENTITY(world, entity##DebugGui, debug.gui.Window);                                         \
     ecs_set(                                                                                       \
         world,                                                                                     \
@@ -37,6 +37,6 @@ void DebugGuiImport(ecs_world_t* world);
             .name = #entity,                                                                       \
             .window_fn = func,                                                                     \
             .shortcut_str = shortcut,                                                              \
-            .ctx = &(ctx_type)context,                                                             \
+            .ctx = &(ctx_type)__VA_ARGS__,                                                         \
             .ctx_size = sizeof(ctx_type),                                                          \
         });

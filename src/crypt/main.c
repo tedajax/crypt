@@ -84,15 +84,21 @@ typedef struct InvaderTarget {
     ecs_entity_t target_ent;
 } InvaderTarget;
 
+typedef struct MaxHealth {
+    float value;
+} MaxHealth;
+
 typedef struct Health {
-    float health;
+    float value;
 } Health;
 
 typedef struct Damage {
     float amount;
-    ecs_entity_t source;
-    ecs_entity_t target;
 } Damage;
+
+typedef struct DamageConfig {
+    float amount;
+} DamageConfig;
 
 ECS_COMPONENT_DECLARE(Target);
 ECS_COMPONENT_DECLARE(Bounds);
@@ -103,6 +109,11 @@ ECS_COMPONENT_DECLARE(InvaderControlContext);
 ECS_COMPONENT_DECLARE(InvaderPosition);
 ECS_COMPONENT_DECLARE(InvaderTarget);
 ECS_COMPONENT_DECLARE(InvaderConfig);
+
+ECS_COMPONENT_DECLARE(Health);
+ECS_COMPONENT_DECLARE(MaxHealth);
+ECS_COMPONENT_DECLARE(Damage);
+ECS_COMPONENT_DECLARE(DamageConfig);
 
 //// TAGS
 ECS_TAG_DECLARE(Projectile);
@@ -119,10 +130,13 @@ void TankGatherInput(ecs_iter_t* it);
 void TankControl(ecs_iter_t* it);
 void Move(ecs_iter_t* it);
 void ExpireAfterUpdate(ecs_iter_t* it);
+void ExpireAfterTraitUpdate(ecs_iter_t* it);
 void TankGunControl(ecs_iter_t* it);
 void CopyExpireAfter(ecs_iter_t* it);
 void UpdateBounds(ecs_iter_t* it);
 void OnInvaderRemoved(ecs_iter_t* it);
+void ApplyDamage(ecs_iter_t* it);
+void InitializeHealth(ecs_iter_t* it);
 
 vec2 rnd_dir()
 {
@@ -179,6 +193,7 @@ void invader_control_debug_gui(ecs_world_t* world, void* ctx)
     igLabelText("Total", "%d", config->invader_rows * config->invader_cols);
     needs_reset |= igInputInt("Rows", &config->invader_rows, 1, 5, ImGuiInputTextFlags_None);
     needs_reset |= igInputInt("Cols", &config->invader_cols, 1, 5, ImGuiInputTextFlags_None);
+    igInputFloat2("Spacing", &config->spacing.x, "%0.2f", ImGuiInputTextFlags_None);
     igInputFloat(
         "Min Interval", &config->min_step_interval, 0.01f, 0.1f, "%.05f", ImGuiInputTextFlags_None);
     igInputFloat(
@@ -190,6 +205,29 @@ void invader_control_debug_gui(ecs_world_t* world, void* ctx)
         ecs_set_id(
             world, context->e_control, ecs_id(InvadersConfig), sizeof(InvadersConfig), config);
     }
+}
+
+void ecs_logf(ecs_world_t* world, const char* fmt, ...)
+{
+    char buffer[512];
+
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer, 512, fmt, args);
+    va_end(args);
+
+    const ecs_world_info_t* info = ecs_get_world_info(world);
+    printf("%04.2fs | %s\n", info->world_time_total, buffer);
+}
+
+void bullet_contact_start(ecs_world_t* world, ecs_entity_t self, ecs_entity_t other)
+{
+    const DamageConfig* damage = ecs_get(world, self, DamageConfig);
+    if (damage) {
+        ecs_set(world, other, Damage, {.amount = damage->amount});
+    }
+
+    ecs_delete(world, self);
 }
 
 int main(int argc, char* argv[])
@@ -242,6 +280,10 @@ int main(int argc, char* argv[])
     ECS_COMPONENT(world, GunConfig);
     ECS_COMPONENT(world, GunState);
     ECS_COMPONENT(world, GunInput);
+    ECS_COMPONENT_DEFINE(world, Health);
+    ECS_COMPONENT_DEFINE(world, MaxHealth);
+    ECS_COMPONENT_DEFINE(world, Damage);
+    ECS_COMPONENT_DEFINE(world, DamageConfig);
 
     ECS_TAG_DEFINE(world, Projectile);
     ECS_TAG_DEFINE(world, Friendly);
@@ -261,24 +303,27 @@ int main(int argc, char* argv[])
     ECS_SYSTEM(world, AddInvaders, EcsOnSet, InvaderControlContext, InvadersConfig, InvaderRoot:game.comp.Position);
     ECS_SYSTEM(world, RemoveInvaders, EcsUnSet, InvaderControlContext, InvadersConfig);
     ECS_SYSTEM(world, Move, EcsOnUpdate, game.comp.Position, game.comp.Velocity, !NoAutoMove);
-    ECS_SYSTEM(world, ExpireAfterUpdate, EcsOnUpdate, ExpireAfter);
+    ECS_SYSTEM(world, ExpireAfterUpdate, EcsPostUpdate, ExpireAfter);
+    ECS_SYSTEM(world, ExpireAfterTraitUpdate, EcsPostUpdate, PAIR | ExpireAfter);
     ECS_SYSTEM(world, TankGunControl, EcsOnUpdate, PARENT:TankInput, GunConfig, GunState, PARENT:game.comp.Position, OWNED:game.comp.Position);
     ECS_SYSTEM(world, UpdateBounds, EcsPostUpdate, game.comp.Position, Bounds);
+    ECS_SYSTEM(world, ApplyDamage, EcsOnSet, Health, Damage);
+    ECS_SYSTEM(world, InitializeHealth, EcsOnSet, [in] ANY:MaxHealth, !Health);
 
     // entities using an expire after component from a prerab will need to copy the prefab value into their own instance
     ECS_SYSTEM(world, CopyExpireAfter, EcsOnSet, SHARED:ExpireAfter);
     ECS_TRIGGER(world, OnInvaderRemoved, EcsOnRemove, InvaderTarget);
     // clang-format on
 
-    ECS_PREFAB(
-        world, InvaderPrefab, sprite.renderer.Sprite, physics.BoxCollider, Hostile, NoAutoMove);
+    ECS_PREFAB(world, InvaderPrefab, sprite.renderer.Sprite, physics.Box, Hostile, NoAutoMove);
     ecs_set(
         world,
         InvaderPrefab,
         Sprite,
         {.sprite_id = 2, .layer = 2.0f, .origin = (vec2){0.5f, 0.5f}, .width = 1, .height = 1});
-    ecs_set(world, InvaderPrefab, BoxCollider, {.layer = 1, .size = {0.5f, 0.5f}});
+    ecs_set(world, InvaderPrefab, PhysBox, {.size = {0.5f, 0.5f}});
     ecs_set(world, InvaderPrefab, InvaderConfig, {.smooth = 0.4f});
+    ecs_set(world, InvaderPrefab, MaxHealth, {.value = 3.0f});
 
     ecs_set(
         world,
@@ -319,16 +364,12 @@ int main(int argc, char* argv[])
         {.sprite_id = 0, .layer = 1.0f, .origin = (vec2){0.5f, 1.0f}, .width = 2, .height = 1});
     ecs_set(world, Tank, TankConfig, {.bounds_x = 16.0f});
 
-    ECS_PREFAB(world, TankProjectilePrefab, Projectile, ExpireAfter, physics.BoxCollider, Friendly);
-    ecs_set(world, TankProjectilePrefab, BoxCollider, {.size = {.x = 0.125f, .y = 0.25f}});
+    ECS_PREFAB(world, TankProjectilePrefab, Projectile, ExpireAfter, physics.Box, Friendly);
+    ecs_set(world, TankProjectilePrefab, DamageConfig, {.amount = 1.0f});
+    ecs_set(world, TankProjectilePrefab, PhysBox, {.size = {.x = 0.125f, .y = 0.25f}});
     ecs_set(world, TankProjectilePrefab, ExpireAfter, {.seconds = 1.0f});
-
-    {
-        ecs_query_t* query = ecs_query_new(
-            world,
-            "[in] game.comp.Position, [in] ANY:physics.BoxCollider, !ANY:Friendly, ANY:Hostile");
-        ecs_set(world, TankProjectilePrefab, ColliderQuery, {.q_targets = query});
-    }
+    ecs_set(world, TankProjectilePrefab, PhysQuery, {.sig = "!ANY:Friendly, ANY:Hostile"});
+    ecs_set(world, TankProjectilePrefab, PhysReceiver, {.on_contact_start = bullet_contact_start});
 
     ECS_ENTITY(world, TankGun, CHILDOF | Tank, game.comp.Position, GunConfig, GunState);
     ecs_set(
@@ -487,6 +528,7 @@ void RemoveInvaders(ecs_iter_t* it)
 void AddInvaders(ecs_iter_t* it)
 {
     ECS_IMPORT(it->world, GameComp);
+    ECS_IMPORT(it->world, Physics);
 
     InvaderControlContext* context = ecs_term(it, InvaderControlContext, 1);
     InvadersConfig* config = ecs_term(it, InvadersConfig, 2);
@@ -513,6 +555,7 @@ void AddInvaders(ecs_iter_t* it)
         ecs_set_ptr(it->world, invader, Position, &world_pos);
         ecs_set(it->world, invader, Velocity, {0});
         ecs_set(it->world, invader, InvaderConfig, {.smooth = 0.025f * i});
+        ecs_set_trait(it->world, invader, PhysBox, PhysCollider, {.layer = 1});
     }
 }
 
@@ -540,12 +583,6 @@ void TankControl(ecs_iter_t* it)
     TankControlContext* context = ecs_term(it, TankControlContext, 5);
 
     ECS_IMPORT(it->world, GameComp);
-    // draw_set_prim_layer(10.0f);
-    // draw_line_col((vec2){-15, -8}, (vec2){15, 8}, (vec4){1, 0, 0, 1});
-    // draw_set_prim_layer(5.0f);
-    // draw_rect_col((vec2){-5, -5}, (vec2){5, 5}, (vec4){1, 1, 0, 1});
-    // draw_set_prim_layer(0.0f);
-    // draw_rect_col((vec2){-2, -3}, (vec2){3, 2}, (vec4){1, 0, 1, 1});
 
     for (int32_t i = 0; i < it->count; ++i) {
         velocity[i].x = input[i].move * 32.0f;
@@ -567,6 +604,7 @@ void TankGunControl(ecs_iter_t* it)
     Position* gun_pos = ecs_term(it, Position, 5);
 
     ECS_IMPORT(it->world, GameComp);
+    ECS_IMPORT(it->world, Physics);
 
     for (int32_t i = 0; i < it->count; ++i) {
         if (state[i].shot_timer > 0.0f) {
@@ -583,6 +621,7 @@ void TankGunControl(ecs_iter_t* it)
             ecs_entity_t projectile = ecs_new_w_pair(it->world, EcsIsA, config->projectile_prefab);
             ecs_set(it->world, projectile, Position, {.x = pos.x, .y = pos.y - 1.0f});
             ecs_set(it->world, projectile, Velocity, {.x = 0.0f, .y = -32.0f});
+            ecs_set_trait(it->world, projectile, PhysBox, PhysCollider, {.layer = 0});
         }
     }
 }
@@ -606,6 +645,21 @@ void ExpireAfterUpdate(ecs_iter_t* it)
         expire[i].seconds -= it->delta_time;
         if (expire[i].seconds <= 0) {
             ecs_delete(it->world, it->entities[i]);
+        }
+    }
+}
+
+void ExpireAfterTraitUpdate(ecs_iter_t* it)
+{
+    ExpireAfter* expire = ecs_term(it, ExpireAfter, 1);
+    ecs_entity_t trait = ecs_term_id(it, 1);
+    ecs_entity_t comp = ecs_entity_t_lo(trait);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        expire[i].seconds -= it->delta_time;
+        if (expire[i].seconds <= 0) {
+            ecs_remove_id(it->world, it->entities[i], trait);
+            ecs_remove_id(it->world, it->entities[i], comp);
         }
     }
 }
@@ -657,5 +711,37 @@ void OnInvaderRemoved(ecs_iter_t* it)
 
     for (int32_t i = 0; i < it->count; ++i) {
         ecs_delete(it->world, targ[i].target_ent);
+    }
+}
+
+void ApplyDamage(ecs_iter_t* it)
+{
+    Health* health = ecs_term(it, Health, 1);
+    Damage* damage = ecs_term(it, Damage, 2);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        health[i].value -= damage[i].amount;
+        ecs_remove(it->world, it->entities[i], Damage);
+
+        if (health[i].value <= 0) {
+            ecs_delete(it->world, it->entities[i]);
+        }
+    }
+}
+
+void InitializeHealth(ecs_iter_t* it)
+{
+    MaxHealth* max_health = ecs_term(it, MaxHealth, 1);
+
+    if (ecs_is_owned(it, 1)) {
+        for (int32_t i = 0; i < it->count; ++i) {
+            float health = max_health[i].value;
+            ecs_set(it->world, it->entities[i], Health, {.value = health});
+        }
+    } else {
+        float health = max_health->value;
+        for (int32_t i = 0; i < it->count; ++i) {
+            ecs_set(it->world, it->entities[i], Health, {.value = health});
+        }
     }
 }

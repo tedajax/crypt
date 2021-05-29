@@ -1,5 +1,6 @@
 #pragma once
 
+#include "color.h"
 #include "flecs.h"
 #include "sokol_gfx.h"
 #include "tx_math.h"

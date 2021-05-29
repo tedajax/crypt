@@ -128,7 +128,7 @@ void debug_panel_gui(ecs_world_t* world, void* ctx)
         while (ecs_query_next(&it)) {
             DebugWindow* window = ecs_term(&it, DebugWindow, 1);
             for (int32_t i = 0; i < it.count; ++i) {
-                if (strcmp(window[i].name, "Debug Panel") == 0) {
+                if (strcmp(window[i].name, "DebugPanel") == 0) {
                     continue;
                 }
 
@@ -177,26 +177,9 @@ void DebugGuiImport(ecs_world_t* world)
     ECS_SYSTEM(world, UnloadDebugWindowContext, EcsUnSet, DebugWindow);
     ECS_SYSTEM(world, UpdateDebugWindows, EcsPreStore, DebugWindow);
 
-    ECS_ENTITY(world, DebugPanel, DebugWindow);
-
     ecs_query_t* query = ecs_query_new(world, "debug.gui.Window");
-    ecs_set(
-        world,
-        DebugPanel,
-        DebugWindow,
-        {
-            .name = "Debug Panel",
-            .shortcut =
-                {
-                    .key = TXINP_KEY_GRAVE,
-                },
-            .window_fn = debug_panel_gui,
-            .ctx =
-                &(debug_panel_context){
-                    .q_debug_windows = query,
-                },
-            .ctx_size = sizeof(debug_panel_context),
-        });
+    DEBUG_PANEL(
+        world, DebugPanel, "`", debug_panel_gui, debug_panel_context, {.q_debug_windows = query});
 
     ECS_EXPORT_COMPONENT(DebugWindow);
 }
