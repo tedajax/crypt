@@ -23045,10 +23045,10 @@ static void ecs_enable_system(
 
 void ecs_enable(ecs_world_t *world, ecs_entity_t entity, bool enabled)
 {
-
     const EcsType *type_ptr = ecs_get(world, entity, EcsType);
     if (type_ptr) {
         ecs_assert(world->magic == ECS_WORLD_MAGIC, ECS_INVALID_PARAMETER, NULL);
+        
         /* If entity is a type, disable all entities in the type */
         ecs_vector_each(type_ptr->normalized, ecs_entity_t, e, { ecs_enable(world, *e, enabled); });
     } else {
