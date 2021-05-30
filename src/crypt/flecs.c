@@ -983,7 +983,9 @@ typedef enum ecs_op_kind_t {
     EcsOpDelete,
     EcsOpClear,
     EcsOpEnable,
-    EcsOpDisable
+    EcsOpDisable,
+    EcsOpEnableEntity,
+    EcsOpDisableEntity,
 } ecs_op_kind_t;
 
 typedef struct ecs_op_1_t {
@@ -8350,6 +8352,12 @@ bool ecs_defer_flush(
                     ecs_enable_component_w_id(
                         world, e, op->component, false);
                     break;
+                case EcsOpEnableEntity:
+                    ecs_enable(world, e, true);
+                    break;
+                case EcsOpDisableEntity:
+                    ecs_enable(world, e, false);
+                    break;
                 case EcsOpClear:
                     ecs_clear(world, e);
                     break;
@@ -8616,6 +8624,24 @@ bool ecs_defer_enable(
         op->kind = enable ? EcsOpEnable : EcsOpDisable;
         op->is._1.entity = entity;
         op->component = component;
+        return true;
+    } else {
+        stage->defer ++;
+    }
+    return false;
+}
+
+bool ecs_defer_enable_entity(
+    ecs_world_t *world,
+    ecs_stage_t *stage,
+    ecs_entity_t entity,
+    bool enable)
+{
+    (void)world;
+    if (stage->defer) {
+        ecs_op_t *op = new_defer_op(stage);
+        op->kind = enable ? EcsOpEnableEntity : EcsOpDisableEntity;
+        op->is._1.entity = entity;
         return true;
     } else {
         stage->defer ++;
@@ -25932,6 +25958,20 @@ void ecs_enable(
     ecs_entity_t entity,
     bool enabled)
 {
+    ecs_assert(world != NULL, ECS_INVALID_PARAMETER, NULL);
+    ecs_assert(ecs_is_valid(world, entity), ECS_INVALID_PARAMETER, NULL);
+
+    ecs_stage_t *stage = ecs_stage_from_world(&world);
+
+    if (ecs_defer_enable_entity(
+        world, stage, entity, enabled))
+    {
+        return;
+    } else {
+        /* Operations invoked by enable/disable should not be deferred */
+        stage->defer --;
+    }
+
     ecs_assert(world->magic == ECS_WORLD_MAGIC, ECS_INVALID_PARAMETER, NULL);
 
     const EcsType *type_ptr = ecs_get( world, entity, EcsType);
