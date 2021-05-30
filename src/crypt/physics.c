@@ -191,12 +191,18 @@ void TestQueryContacts(ecs_iter_t* it)
 }
 
 typedef struct physics_debug_gui_context {
-    int dummy;
+    ecs_entity_t debug_view_ent;
 } physics_debug_gui_context;
 
 void physics_debug_gui(ecs_world_t* world, void* ctx)
 {
     physics_debug_gui_context* context = (physics_debug_gui_context*)ctx;
+
+    bool enabled = !ecs_has_entity(world, context->debug_view_ent, EcsDisabled);
+
+    if (igCheckbox("Debug Colliders", &enabled)) {
+        ecs_enable(world, context->debug_view_ent, enabled);
+    }
 }
 
 void physics_fini(ecs_world_t* world, void* ctx)
@@ -222,14 +228,20 @@ void PhysicsImport(ecs_world_t* world)
     ECS_COMPONENT(world, PhysBox);
 
     // clang-format off
-    // ECS_SYSTEM(world, BoxColliderView, EcsPostUpdate, game.comp.Position, PAIR | physics.Collider > physics.Box);
+    ECS_SYSTEM(world, BoxColliderView, EcsPostUpdate, game.comp.Position, PAIR | physics.Collider > physics.Box);
     ECS_SYSTEM(world, CreatePhysicsQueries, EcsOnSet, ANY:physics.Query);
     ECS_SYSTEM(world, TestQueryContacts, EcsOnValidate, [in] ANY:physics.Query, [in] ANY:physics.Receiver, [in] PAIR | physics.Collider, game.comp.Position);
     // clang-format on
 
     ECS_IMPORT(world, DebugGui);
 
-    DEBUG_PANEL(world, PhysicsDebug, "shift+3", physics_debug_gui, physics_debug_gui_context, {0});
+    DEBUG_PANEL(
+        world,
+        PhysicsDebug,
+        "shift+3",
+        physics_debug_gui,
+        physics_debug_gui_context,
+        {.debug_view_ent = BoxColliderView});
 
     ECS_EXPORT_COMPONENT(PhysQuery);
 

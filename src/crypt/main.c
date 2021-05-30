@@ -9,6 +9,7 @@
 #include "tx_input.h"
 #include "tx_math.h"
 #include "tx_rand.h"
+#include <SDL2/SDL.h>
 #include <ccimgui.h>
 #include <time.h>
 
@@ -305,7 +306,7 @@ int main(int argc, char* argv[])
     ECS_SYSTEM(world, Move, EcsOnUpdate, game.comp.Position, game.comp.Velocity, !NoAutoMove);
     ECS_SYSTEM(world, ExpireAfterUpdate, EcsPostUpdate, ExpireAfter);
     ECS_SYSTEM(world, ExpireAfterTraitUpdate, EcsPostUpdate, PAIR | ExpireAfter);
-    ECS_SYSTEM(world, TankGunControl, EcsOnUpdate, PARENT:TankInput, GunConfig, GunState, PARENT:game.comp.Position, OWNED:game.comp.Position);
+    ECS_SYSTEM(world, TankGunControl, EcsOnUpdate, PARENT:TankInput, GunConfig, GunState, OWNED:game.comp.Position);
     ECS_SYSTEM(world, UpdateBounds, EcsPostUpdate, game.comp.Position, Bounds);
     ECS_SYSTEM(world, ApplyDamage, EcsOnSet, Health, Damage);
     ECS_SYSTEM(world, InitializeHealth, EcsOnSet, [in] ANY:MaxHealth, !Health);
@@ -320,7 +321,7 @@ int main(int argc, char* argv[])
         world,
         InvaderPrefab,
         Sprite,
-        {.sprite_id = 2, .layer = 2.0f, .origin = (vec2){0.5f, 0.5f}, .width = 1, .height = 1});
+        {.sprite_id = 2, .layer = 10.0f, .origin = (vec2){0.5f, 0.5f}, .width = 1, .height = 1});
     ecs_set(world, InvaderPrefab, PhysBox, {.size = {0.5f, 0.5f}});
     ecs_set(world, InvaderPrefab, InvaderConfig, {.smooth = 0.4f});
     ecs_set(world, InvaderPrefab, MaxHealth, {.value = 3.0f});
@@ -361,7 +362,7 @@ int main(int argc, char* argv[])
         world,
         Tank,
         Sprite,
-        {.sprite_id = 0, .layer = 1.0f, .origin = (vec2){0.5f, 1.0f}, .width = 2, .height = 1});
+        {.sprite_id = 0, .layer = 5.0f, .origin = (vec2){0.5f, 1.0f}, .width = 2, .height = 1});
     ecs_set(world, Tank, TankConfig, {.bounds_x = 16.0f});
 
     ECS_PREFAB(world, TankProjectilePrefab, Projectile, ExpireAfter, physics.Box, Friendly);
@@ -370,6 +371,11 @@ int main(int argc, char* argv[])
     ecs_set(world, TankProjectilePrefab, ExpireAfter, {.seconds = 1.0f});
     ecs_set(world, TankProjectilePrefab, PhysQuery, {.sig = "!ANY:Friendly, ANY:Hostile"});
     ecs_set(world, TankProjectilePrefab, PhysReceiver, {.on_contact_start = bullet_contact_start});
+    ecs_set(
+        world,
+        TankProjectilePrefab,
+        Sprite,
+        {.sprite_id = 16, .width = 1, .height = 1, .origin = {0.5f, 0.5f}, .layer = 6.0f});
 
     ECS_ENTITY(world, TankGun, CHILDOF | Tank, game.comp.Position, GunConfig, GunState);
     ecs_set(
@@ -381,7 +387,7 @@ int main(int argc, char* argv[])
             .shot_interval = 0.08f,
         });
     ecs_set(world, TankGun, GunState, {0});
-    ecs_set(world, TankGun, Position, {0, -1});
+    ecs_set(world, TankGun, LocalPosition, {0, 0.25f});
 
     ecs_set(world, TankControl, TankControlContext, {.bullet_prefab = TankProjectilePrefab});
 
@@ -478,12 +484,14 @@ void InvaderRootControl(ecs_iter_t* it)
 
 void InvaderMovement(ecs_iter_t* it)
 {
-    ECS_IMPORT(it->world, GameComp);
+    // ECS_IMPORT(it->world, GameComp);
 
     Position* pos = ecs_term(it, Position, 1);
     Velocity* vel = ecs_term(it, Velocity, 2);
     InvaderTarget* targ = ecs_term(it, InvaderTarget, 3);
     const InvaderConfig* config = ecs_term(it, InvaderConfig, 4);
+
+    ecs_entity_t ecs_typeid(Position) = ecs_term_id(it, 1);
 
     for (int32_t i = 0; i < it->count; ++i) {
         const Position* target_pos = ecs_get(it->world, targ[i].target_ent, Position);
@@ -555,7 +563,7 @@ void AddInvaders(ecs_iter_t* it)
         ecs_set_ptr(it->world, invader, Position, &world_pos);
         ecs_set(it->world, invader, Velocity, {0});
 
-        ecs_set(it->world, invader, InvaderConfig, {.smooth = txrng_rangef(0.05f, 0.5f)});
+        ecs_set(it->world, invader, InvaderConfig, {.smooth = (row + 1) * 0.15f});
         ecs_set_trait(it->world, invader, PhysBox, PhysCollider, {.layer = 1});
     }
 }
@@ -583,8 +591,6 @@ void TankControl(ecs_iter_t* it)
     TankConfig* config = ecs_term(it, TankConfig, 4);
     TankControlContext* context = ecs_term(it, TankControlContext, 5);
 
-    ECS_IMPORT(it->world, GameComp);
-
     for (int32_t i = 0; i < it->count; ++i) {
         velocity[i].x = input[i].move * 32.0f;
         position[i] = vec2_add(position[i], vec2_scale(velocity[i], it->delta_time));
@@ -601,11 +607,10 @@ void TankGunControl(ecs_iter_t* it)
     TankInput* tank_input = ecs_term(it, TankInput, 1);
     GunConfig* config = ecs_term(it, GunConfig, 2);
     GunState* state = ecs_term(it, GunState, 3);
-    Position* tank_pos = ecs_term(it, Position, 4);
-    Position* gun_pos = ecs_term(it, Position, 5);
+    Position* gun_pos = ecs_term(it, Position, 4);
 
-    ECS_IMPORT(it->world, GameComp);
     ECS_IMPORT(it->world, Physics);
+    ECS_IMPORT(it->world, GameComp);
 
     for (int32_t i = 0; i < it->count; ++i) {
         if (state[i].shot_timer > 0.0f) {
@@ -617,11 +622,11 @@ void TankGunControl(ecs_iter_t* it)
         if (fire) {
             state[i].shot_timer += config[i].shot_interval;
 
-            vec2 pos = vec2_add(tank_pos[i], gun_pos[i]);
+            vec2 pos = gun_pos[i]; // vec2_add(tank_pos[i], gun_pos[i]);
 
             ecs_entity_t projectile = ecs_new_w_pair(it->world, EcsIsA, config->projectile_prefab);
             ecs_set(it->world, projectile, Position, {.x = pos.x, .y = pos.y - 1.0f});
-            ecs_set(it->world, projectile, Velocity, {.x = 0.0f, .y = -32.0f});
+            ecs_set(it->world, projectile, Velocity, {.x = 0.0f, .y = -64.0f});
             ecs_set_trait(it->world, projectile, PhysBox, PhysCollider, {.layer = 0});
         }
     }

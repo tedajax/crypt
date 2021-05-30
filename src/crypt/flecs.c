@@ -1829,6 +1829,7 @@ void _ecs_assert(
     int32_t line)
 {
     if (!condition) {
+        __debugbreak();
         if (param) {
             ecs_err(
                 "assert(%s) %s:%d: %s (%s)",
@@ -9753,8 +9754,6 @@ ecs_entity_t ecs_import(
     void *handles_out,
     size_t handles_size)
 {
-    ecs_assert(!world->is_readonly, ECS_INVALID_WHILE_ITERATING, NULL);
-
     ecs_entity_t old_scope = ecs_set_scope(world, 0);
     const char *old_name_prefix = world->name_prefix;
 
@@ -9763,6 +9762,8 @@ ecs_entity_t ecs_import(
     ecs_os_free(path);
 
     if (!e) {
+        ecs_assert(!world->is_readonly, ECS_INVALID_WHILE_ITERATING, NULL);
+        
         ecs_trace_1("import %s", module_name);
         ecs_log_push();
 
@@ -23044,10 +23045,10 @@ static void ecs_enable_system(
 
 void ecs_enable(ecs_world_t *world, ecs_entity_t entity, bool enabled)
 {
-    ecs_assert(world->magic == ECS_WORLD_MAGIC, ECS_INVALID_PARAMETER, NULL);
 
     const EcsType *type_ptr = ecs_get(world, entity, EcsType);
     if (type_ptr) {
+        ecs_assert(world->magic == ECS_WORLD_MAGIC, ECS_INVALID_PARAMETER, NULL);
         /* If entity is a type, disable all entities in the type */
         ecs_vector_each(type_ptr->normalized, ecs_entity_t, e, { ecs_enable(world, *e, enabled); });
     } else {
