@@ -297,19 +297,32 @@ int main(int argc, char* argv[])
     ecs_set(world, InvaderRoot, Bounds, {INFINITY, -INFINITY, INFINITY, -INFINITY});
 
     // clang-format off
-    ECS_SYSTEM(world, UpdatePositionHeirarchy, EcsPostUpdate, CASCADE:game.comp.Position, OWNED:game.comp.LocalPosition, OWNED:game.comp.Position);
+    ECS_SYSTEM(world, UpdatePositionHeirarchy, EcsPostUpdate,
+        CASCADE:game.comp.Position, OWNED:game.comp.LocalPosition, OWNED:game.comp.Position);
     ECS_SYSTEM(world, TankGatherInput, EcsPostLoad, TankInput);
-    ECS_SYSTEM(world, TankControl, EcsOnUpdate, game.comp.Position, game.comp.Velocity, TankInput, TankConfig, SYSTEM:TankControlContext);
-    ECS_SYSTEM(world, InvaderRootControl, EcsOnUpdate, SYSTEM:InvaderControlContext, SYSTEM:InvadersConfig, InvaderRoot:game.comp.Position, InvaderRoot:Bounds);
-    ECS_SYSTEM(world, InvaderMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, InvaderTarget, ANY:InvaderConfig);
-    ECS_SYSTEM(world, AddInvaders, EcsOnSet, InvaderControlContext, InvadersConfig, InvaderRoot:game.comp.Position, :game.comp.LocalPosition, :game.comp.Velocity, :physics.Box, :physics.Collider);
-    ECS_SYSTEM(world, RemoveInvaders, EcsUnSet, InvaderControlContext, InvadersConfig);
-    ECS_SYSTEM(world, Move, EcsOnUpdate, game.comp.Position, game.comp.Velocity, !NoAutoMove);
-    ECS_SYSTEM(world, ExpireAfterUpdate, EcsPostUpdate, ExpireAfter);
+    ECS_SYSTEM(world, TankControl, EcsOnUpdate,
+        game.comp.Position, game.comp.Velocity, TankInput, TankConfig, SYSTEM:TankControlContext);
+    ECS_SYSTEM(world, InvaderRootControl, EcsOnUpdate,
+        SYSTEM:InvaderControlContext, SYSTEM:InvadersConfig,
+        InvaderRoot:game.comp.Position, InvaderRoot:Bounds);
+    ECS_SYSTEM(world, InvaderMovement, EcsOnUpdate,
+        game.comp.Position, game.comp.Velocity, InvaderTarget, ANY:InvaderConfig);
+    ECS_SYSTEM(world, AddInvaders, EcsOnSet,
+        InvaderControlContext, InvadersConfig, InvaderRoot:game.comp.Position,
+        :game.comp.LocalPosition, :game.comp.Velocity, :physics.Box, :physics.Collider);
+    ECS_SYSTEM(world, RemoveInvaders, EcsUnSet,
+        InvaderControlContext, InvadersConfig);
+    ECS_SYSTEM(world, Move, EcsOnUpdate,
+        game.comp.Position, game.comp.Velocity, !NoAutoMove);
+    ECS_SYSTEM(world, ExpireAfterUpdate, EcsPostUpdate,
+        ExpireAfter);
     ECS_SYSTEM(world, ExpireAfterTraitUpdate, EcsPostUpdate, PAIR | ExpireAfter);
-    ECS_SYSTEM(world, TankGunControl, EcsOnUpdate, PARENT:TankInput, GunConfig, GunState, OWNED:game.comp.Position, :game.comp.Velocity, :physics.Box, :physics.Collider);
+    ECS_SYSTEM(world, TankGunControl, EcsOnUpdate,
+        PARENT:TankInput, GunConfig, GunState,
+        OWNED:game.comp.Position, :game.comp.Velocity, :physics.Box, :physics.Collider);
     ECS_SYSTEM(world, UpdateBounds, EcsPostUpdate, game.comp.Position, Bounds);
-    ECS_SYSTEM(world, ApplyDamage, EcsOnSet, Health, Damage, :sprite.renderer.SpriteColor, :ExpireAfter);
+    ECS_SYSTEM(world, ApplyDamage, EcsOnSet,
+        Health, Damage, :sprite.renderer.SpriteColor, :ExpireAfter);
     ECS_SYSTEM(world, InitializeHealth, EcsOnSet, [in] ANY:MaxHealth, !Health);
 
     // entities using an expire after component from a prerab will need to copy the prefab value into their own instance

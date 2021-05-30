@@ -952,7 +952,8 @@ void SpriteRendererImport(ecs_world_t* world)
     ECS_SYSTEM(world, DetachRenderer, EcsUnSet, Renderer);
 
     ECS_SYSTEM(world, RendererNewFrame, EcsPostLoad, Renderer);
-    ECS_SYSTEM(world, GatherSprites, EcsPreStore, game.comp.Position, ANY:Sprite, ?OWNED:SpriteColor);
+    ECS_SYSTEM(world, GatherSprites, EcsPreStore,
+        game.comp.Position, ANY:Sprite, ?OWNED:SpriteColor);
     ECS_SYSTEM(world, Render, EcsPreStore, Renderer);
 
     ECS_SYSTEM(world, FixupSpriteSize, EcsOnSet, Sprite)

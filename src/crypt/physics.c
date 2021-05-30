@@ -228,9 +228,12 @@ void PhysicsImport(ecs_world_t* world)
     ECS_COMPONENT(world, PhysBox);
 
     // clang-format off
-    ECS_SYSTEM(world, BoxColliderView, EcsPostUpdate, game.comp.Position, PAIR | physics.Collider > physics.Box);
+    ECS_SYSTEM(world, BoxColliderView, EcsPostUpdate,
+        game.comp.Position, PAIR | physics.Collider > physics.Box);
     ECS_SYSTEM(world, CreatePhysicsQueries, EcsOnSet, ANY:physics.Query);
-    ECS_SYSTEM(world, TestQueryContacts, EcsOnValidate, [in] ANY:physics.Query, [in] ANY:physics.Receiver, [in] PAIR | physics.Collider, game.comp.Position);
+    ECS_SYSTEM(world, TestQueryContacts, EcsOnValidate,
+        [in] ANY:physics.Query, [in] ANY:physics.Receiver,
+        [in] PAIR | physics.Collider, game.comp.Position);
     // clang-format on
 
     ECS_IMPORT(world, DebugGui);
