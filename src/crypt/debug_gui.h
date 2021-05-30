@@ -40,3 +40,13 @@ void DebugGuiImport(ecs_world_t* world);
             .ctx = &(ctx_type)__VA_ARGS__,                                                         \
             .ctx_size = sizeof(ctx_type),                                                          \
         });
+
+#define DEBUG_PANEL_DECLARE_COMPONENT(type) ECS_COMPONENT_DECLARE(type)
+
+#define DEBUG_PANEL_STORE_COMPONENT(world, type, sig)                                              \
+    .ecs_type(type) = ecs_type_from_str(world, sig),                                               \
+    .ecs_id(type) = ecs_type_to_id(world, ecs_type(type))
+
+#define DEBUG_PANEL_LOAD_COMPONENT(context, type)                                                  \
+    ecs_id_t ecs_id(type) = context->ecs_id(type);                                                 \
+    ecs_type_t ecs_type(type) = context->ecs_type(type)

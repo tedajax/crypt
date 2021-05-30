@@ -105,6 +105,7 @@ static void UpdateDebugWindows(ecs_iter_t* it)
 
 typedef struct debug_panel_context {
     ecs_query_t* q_debug_windows;
+    ECS_DECLARE_COMPONENT(Position);
 } debug_panel_context;
 
 void debug_panel_gui(ecs_world_t* world, void* ctx)
@@ -114,7 +115,8 @@ void debug_panel_gui(ecs_world_t* world, void* ctx)
     ecs_world_stats_t stats;
     ecs_get_world_stats(world, &stats);
 
-    ECS_IMPORT(world, GameComp);
+    ecs_type_t ecs_type(Position) = context->ecs_type(Position);
+    ecs_id_t ecs_id(Position) = context->ecs_id(Position);
 
     igLabelText("Entity Count", "%d", ecs_count(world, Position));
 

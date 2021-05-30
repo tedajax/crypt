@@ -147,13 +147,14 @@ vec2 rnd_dir()
 
 typedef struct tank_debug_context {
     ecs_entity_t e_tank;
+    DEBUG_PANEL_DECLARE_COMPONENT(Position);
 } tank_debug_context;
 
 void tank_debug_gui(ecs_world_t* world, void* ctx)
 {
     tank_debug_context* context = (tank_debug_context*)ctx;
 
-    ECS_IMPORT(world, GameComp);
+    DEBUG_PANEL_LOAD_COMPONENT(context, Position);
 
     const Position* pos = ecs_get(world, context->e_tank, Position);
     TankConfig* config = ecs_get_mut(world, context->e_tank, TankConfig, false);
@@ -301,14 +302,14 @@ int main(int argc, char* argv[])
     ECS_SYSTEM(world, TankControl, EcsOnUpdate, game.comp.Position, game.comp.Velocity, TankInput, TankConfig, SYSTEM:TankControlContext);
     ECS_SYSTEM(world, InvaderRootControl, EcsOnUpdate, SYSTEM:InvaderControlContext, SYSTEM:InvadersConfig, InvaderRoot:game.comp.Position, InvaderRoot:Bounds);
     ECS_SYSTEM(world, InvaderMovement, EcsOnUpdate, game.comp.Position, game.comp.Velocity, InvaderTarget, ANY:InvaderConfig);
-    ECS_SYSTEM(world, AddInvaders, EcsOnSet, InvaderControlContext, InvadersConfig, InvaderRoot:game.comp.Position);
+    ECS_SYSTEM(world, AddInvaders, EcsOnSet, InvaderControlContext, InvadersConfig, InvaderRoot:game.comp.Position, :game.comp.LocalPosition, :game.comp.Velocity, :physics.Box, :physics.Collider);
     ECS_SYSTEM(world, RemoveInvaders, EcsUnSet, InvaderControlContext, InvadersConfig);
     ECS_SYSTEM(world, Move, EcsOnUpdate, game.comp.Position, game.comp.Velocity, !NoAutoMove);
     ECS_SYSTEM(world, ExpireAfterUpdate, EcsPostUpdate, ExpireAfter);
     ECS_SYSTEM(world, ExpireAfterTraitUpdate, EcsPostUpdate, PAIR | ExpireAfter);
-    ECS_SYSTEM(world, TankGunControl, EcsOnUpdate, PARENT:TankInput, GunConfig, GunState, OWNED:game.comp.Position);
+    ECS_SYSTEM(world, TankGunControl, EcsOnUpdate, PARENT:TankInput, GunConfig, GunState, OWNED:game.comp.Position, :game.comp.Velocity, :physics.Box, :physics.Collider);
     ECS_SYSTEM(world, UpdateBounds, EcsPostUpdate, game.comp.Position, Bounds);
-    ECS_SYSTEM(world, ApplyDamage, EcsOnSet, Health, Damage);
+    ECS_SYSTEM(world, ApplyDamage, EcsOnSet, Health, Damage, :sprite.renderer.SpriteColor, :ExpireAfter);
     ECS_SYSTEM(world, InitializeHealth, EcsOnSet, [in] ANY:MaxHealth, !Health);
 
     // entities using an expire after component from a prerab will need to copy the prefab value into their own instance
@@ -391,7 +392,16 @@ int main(int argc, char* argv[])
 
     ecs_set(world, TankControl, TankControlContext, {.bullet_prefab = TankProjectilePrefab});
 
-    DEBUG_PANEL(world, Tank, "shift+1", tank_debug_gui, tank_debug_context, {.e_tank = Tank});
+    DEBUG_PANEL(
+        world,
+        Tank,
+        "shift+1",
+        tank_debug_gui,
+        tank_debug_context,
+        {
+            .e_tank = Tank,
+            DEBUG_PANEL_STORE_COMPONENT(world, Position, "game.comp.Position"),
+        });
     DEBUG_PANEL(
         world,
         InvaderRootControl,
@@ -484,14 +494,12 @@ void InvaderRootControl(ecs_iter_t* it)
 
 void InvaderMovement(ecs_iter_t* it)
 {
-    // ECS_IMPORT(it->world, GameComp);
-
     Position* pos = ecs_term(it, Position, 1);
     Velocity* vel = ecs_term(it, Velocity, 2);
     InvaderTarget* targ = ecs_term(it, InvaderTarget, 3);
     const InvaderConfig* config = ecs_term(it, InvaderConfig, 4);
 
-    ecs_entity_t ecs_typeid(Position) = ecs_term_id(it, 1);
+    ecs_entity_t ecs_id(Position) = ecs_term_id(it, 1);
 
     for (int32_t i = 0; i < it->count; ++i) {
         const Position* target_pos = ecs_get(it->world, targ[i].target_ent, Position);
@@ -535,9 +543,6 @@ void RemoveInvaders(ecs_iter_t* it)
 
 void AddInvaders(ecs_iter_t* it)
 {
-    ECS_IMPORT(it->world, GameComp);
-    ECS_IMPORT(it->world, Physics);
-
     InvaderControlContext* context = ecs_term(it, InvaderControlContext, 1);
     InvadersConfig* config = ecs_term(it, InvadersConfig, 2);
     Position* root = ecs_term(it, Position, 3);
@@ -545,6 +550,12 @@ void AddInvaders(ecs_iter_t* it)
     *root = (vec2){-14, -8};
 
     ecs_entity_t root_ent = ecs_lookup(it->world, "InvaderRoot");
+
+    ecs_id_t ecs_id(Position) = ecs_term_id(it, 3);
+    ecs_id_t ecs_id(LocalPosition) = ecs_term_id(it, 4);
+    ecs_id_t ecs_id(Velocity) = ecs_term_id(it, 5);
+    ecs_id_t ecs_id(PhysBox) = ecs_term_id(it, 6);
+    ecs_id_t ecs_id(PhysCollider) = ecs_term_id(it, 7);
 
     int32_t num_invaders = config->invader_cols * config->invader_rows;
     for (int32_t i = 0; i < num_invaders; ++i) {
@@ -609,8 +620,10 @@ void TankGunControl(ecs_iter_t* it)
     GunState* state = ecs_term(it, GunState, 3);
     Position* gun_pos = ecs_term(it, Position, 4);
 
-    ECS_IMPORT(it->world, Physics);
-    ECS_IMPORT(it->world, GameComp);
+    ecs_entity_t ecs_id(Position) = ecs_term_id(it, 4);
+    ecs_entity_t ecs_id(Velocity) = ecs_term_id(it, 5);
+    ecs_entity_t ecs_id(PhysBox) = ecs_term_id(it, 6);
+    ecs_entity_t ecs_id(PhysCollider) = ecs_term_id(it, 7);
 
     for (int32_t i = 0; i < it->count; ++i) {
         if (state[i].shot_timer > 0.0f) {
@@ -681,10 +694,11 @@ void CopyExpireAfter(ecs_iter_t* it)
 
 void UpdateBounds(ecs_iter_t* it)
 {
-    ECS_IMPORT(it->world, GameComp);
-
     Position* position = ecs_term(it, Position, 1);
     Bounds* bounds = ecs_term(it, Bounds, 2);
+
+    ecs_id_t ecs_id(Position) = ecs_term_id(it, 1);
+    ecs_type_t ecs_type(Position) = ecs_type_from_id(it->world, ecs_id(Position));
 
     ecs_filter_t filter = (ecs_filter_t){
         .include = ecs_type(Position),
@@ -722,10 +736,11 @@ void OnInvaderRemoved(ecs_iter_t* it)
 
 void ApplyDamage(ecs_iter_t* it)
 {
-    ECS_IMPORT(it->world, SpriteRenderer);
-
     Health* health = ecs_term(it, Health, 1);
     Damage* damage = ecs_term(it, Damage, 2);
+
+    ecs_id_t ecs_id(SpriteColor) = ecs_term_id(it, 3);
+    ecs_id_t ecs_id(ExpireAfter) = ecs_term_id(it, 4);
 
     for (int32_t i = 0; i < it->count; ++i) {
         health[i].value -= damage[i].amount;
