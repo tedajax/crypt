@@ -78,7 +78,7 @@ void SystemImguiImport(ecs_world_t* world)
         [out] :system.imgui.ImguiContext);
 
     ECS_SYSTEM(world, ImguiNewFrame, EcsPostLoad, system.sdl2.Window, system.imgui.ImguiContext);
-    ECS_SYSTEM(world, ImguiRender, EcsPostStore, system.imgui.ImguiContext);
+    ECS_SYSTEM(world, ImguiRender, EcsOnStore, system.imgui.ImguiContext);
     // clang-format on
 
     ECS_EXPORT_COMPONENT(ImguiContext);

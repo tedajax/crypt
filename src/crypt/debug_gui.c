@@ -80,29 +80,6 @@ void unload_context(void* ctx, size_t size)
     }
 }
 
-static void UpdateDebugWindows(ecs_iter_t* it)
-{
-    DebugWindow* window = ecs_term(it, DebugWindow, 1);
-
-    for (int32_t i = 0; i < it->count; ++i) {
-        if (window[i].shortcut.key && txinp_get_key_down(window[i].shortcut.key)
-            && txinp_mods_down(window[i].shortcut.mod))
-        {
-            window[i].is_visible = !window[i].is_visible;
-            if (window[i].is_visible) window[i].is_open = true;
-        }
-
-        if (window[i].is_visible) {
-            if (igBegin(window[i].name, &window[i].is_open, ImGuiWindowFlags_None)) {
-                if (window[i].window_fn) {
-                    window[i].window_fn(it->world, window[i].ctx);
-                }
-            }
-            igEnd();
-        }
-    }
-}
-
 typedef struct debug_panel_context {
     ecs_query_t* q_debug_windows;
     ECS_DECLARE_COMPONENT(Position);
@@ -144,6 +121,29 @@ void debug_panel_gui(ecs_world_t* world, void* ctx)
         }
     }
     igEndChild();
+}
+
+static void UpdateDebugWindows(ecs_iter_t* it)
+{
+    DebugWindow* window = ecs_term(it, DebugWindow, 1);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        if (window[i].shortcut.key && txinp_get_key_down(window[i].shortcut.key)
+            && txinp_mods_down(window[i].shortcut.mod))
+        {
+            window[i].is_visible = !window[i].is_visible;
+            if (window[i].is_visible) window[i].is_open = true;
+        }
+
+        if (window[i].is_visible) {
+            if (igBegin(window[i].name, &window[i].is_open, ImGuiWindowFlags_None)) {
+                if (window[i].window_fn) {
+                    window[i].window_fn(it->world, window[i].ctx);
+                }
+            }
+            igEnd();
+        }
+    }
 }
 
 static void StoreDebugWindowContext(ecs_iter_t* it)
