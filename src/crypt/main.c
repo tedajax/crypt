@@ -382,14 +382,14 @@ int main(int argc, char* argv[])
     ECS_PREFAB(world, TankProjectilePrefab, Projectile, ExpireAfter, physics.Box, Friendly);
     ecs_set(world, TankProjectilePrefab, DamageConfig, {.amount = 1.0f});
     ecs_set(world, TankProjectilePrefab, PhysBox, {.size = {.x = 0.125f, .y = 0.25f}});
-    ecs_set(world, TankProjectilePrefab, ExpireAfter, {.seconds = 1.0f});
+    ecs_set(world, TankProjectilePrefab, ExpireAfter, {.seconds = 0.75f});
     ecs_set(world, TankProjectilePrefab, PhysQuery, {.sig = "!ANY:Friendly, ANY:Hostile"});
     ecs_set(world, TankProjectilePrefab, PhysReceiver, {.on_contact_start = bullet_contact_start});
     ecs_set(
         world,
         TankProjectilePrefab,
         Sprite,
-        {.sprite_id = 16, .width = 1, .height = 1, .origin = {0.5f, 0.5f}, .layer = 6.0f});
+        {.sprite_id = 16, .width = 1, .height = 1, .origin = {0.5f, 0.5f}, .layer = 4.0f});
 
     ECS_ENTITY(world, TankGun, CHILDOF | Tank, game.comp.Position, GunConfig, GunState);
     ecs_set(
@@ -398,7 +398,7 @@ int main(int argc, char* argv[])
         GunConfig,
         {
             .projectile_prefab = TankProjectilePrefab,
-            .shot_interval = 0.08f,
+            .shot_interval = 0.01f,
         });
     ecs_set(world, TankGun, GunState, {0});
     ecs_set(world, TankGun, LocalPosition, {0, 0.25f});
@@ -658,7 +658,7 @@ void TankGunControl(ecs_iter_t* it)
                 ecs_entity_t projectile =
                     ecs_new_w_pair(it->world, EcsIsA, config->projectile_prefab);
                 ecs_set(it->world, projectile, Position, {.x = pos.x, .y = pos.y - 1.0f});
-                ecs_set(it->world, projectile, Velocity, {.x = b * 2.0f, .y = -64.0f});
+                ecs_set(it->world, projectile, Velocity, {.x = b * 2.0f, .y = -32.0f});
                 ecs_set_trait(it->world, projectile, PhysBox, PhysCollider, {.layer = 0});
             }
         }

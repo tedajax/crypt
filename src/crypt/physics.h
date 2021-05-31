@@ -24,11 +24,17 @@ typedef struct PhysBox {
     vec2 size;
 } PhysBox;
 
+typedef struct PhysWorldBounds {
+    float left, right;
+    float top, bottom;
+} PhysWorldBounds;
+
 typedef struct Physics {
     ECS_DECLARE_COMPONENT(PhysQuery);
     ECS_DECLARE_COMPONENT(PhysReceiver);
     ECS_DECLARE_COMPONENT(PhysCollider);
     ECS_DECLARE_COMPONENT(PhysBox);
+    ECS_DECLARE_COMPONENT(PhysWorldBounds);
 } Physics;
 
 void PhysicsImport(ecs_world_t* world);
@@ -37,4 +43,5 @@ void PhysicsImport(ecs_world_t* world);
     ECS_IMPORT_COMPONENT(handles, PhysQuery);                                                      \
     ECS_IMPORT_COMPONENT(handles, PhysReceiver);                                                   \
     ECS_IMPORT_COMPONENT(handles, PhysCollider);                                                   \
-    ECS_IMPORT_COMPONENT(handles, PhysBox);
+    ECS_IMPORT_COMPONENT(handles, PhysBox);                                                        \
+    ECS_IMPORT_COMPONENT(handles, PhysWorldBounds);

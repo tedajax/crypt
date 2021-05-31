@@ -22,6 +22,15 @@ void box_to_world_rect(vec2 center, vec2 size, struct world_rect* out)
     out->top = center.y + size.y;
 }
 
+void box_to_bounds(vec2 center, vec2 size, float bounds[4])
+{
+
+    bounds[0] = center.x - size.x;
+    bounds[1] = center.x + size.x;
+    bounds[2] = center.y - size.y;
+    bounds[3] = center.y + size.y;
+}
+
 void BoxColliderView(ecs_iter_t* it)
 {
     Position* position = ecs_term(it, Position, 1);
@@ -121,7 +130,12 @@ void CreatePhysicsQueries(ecs_iter_t* it)
             create_collider_queries(it->world, &query[i]);
         }
     } else {
-        create_collider_queries(it->world, query);
+        PhysQuery* shared = ecs_term(it, PhysQuery, 2);
+        if (shared && shared->boxes) {
+            query->boxes = shared->boxes;
+        } else {
+            create_collider_queries(it->world, query);
+        }
     }
 }
 
@@ -134,54 +148,101 @@ void TestQueryContacts(ecs_iter_t* it)
     ecs_entity_t comp = ecs_entity_t_lo(trait);
     Position* pos = ecs_term(it, Position, 4);
 
-    for (int32_t i = 0; i < it->count; ++i) {
-        const PhysBox* box0 = ecs_get_w_id(it->world, it->entities[i], comp);
-        if (!box0) {
-            continue;
-        }
-
-        struct world_rect rect0;
-        box_to_world_rect(pos[i], box0->size, &rect0);
-
-        PhysQuery* q = query;
-        if (ecs_is_owned(it, 1)) {
-            q = &query[i];
-        }
-
-        PhysReceiver* r = receiver;
-        if (ecs_is_owned(it, 2)) {
-            r = &receiver[i];
-        }
-
-        ecs_iter_t qit = ecs_query_iter(q->boxes);
+    if (!ecs_is_owned(it, 1)) {
+        ecs_iter_t qit = ecs_query_iter(query->boxes);
         while (ecs_query_next(&qit)) {
-            Position* pos1 = ecs_term(&qit, Position, 1);
             for (int32_t j = 0; j < qit.count; ++j) {
+                Position* pos1 = ecs_term(&qit, Position, 1);
                 const PhysBox* box1 = ecs_get_w_id(it->world, qit.entities[j], comp);
                 struct world_rect rect1;
                 box_to_world_rect(pos1[j], box1->size, &rect1);
 
-                ecs_entity_t ent0 = it->entities[i];
-                ecs_entity_t ent1 = qit.entities[j];
+                for (int32_t i = 0; i < it->count; ++i) {
+                    const PhysBox* box0 = ecs_get_w_id(it->world, it->entities[i], comp);
+                    if (!box0) {
+                        continue;
+                    }
 
-                if (world_rect_overlap(&rect0, &rect1)) {
-                    bool started = add_contact(ent0, ent1);
+                    struct world_rect rect0;
+                    box_to_world_rect(pos[i], box0->size, &rect0);
 
-                    if (started) {
-                        if (r->on_contact_start) {
-                            r->on_contact_start(it->world, ent0, ent1);
+                    PhysReceiver* r = receiver;
+                    if (ecs_is_owned(it, 2)) {
+                        r = &receiver[i];
+                    }
+
+                    ecs_entity_t ent0 = it->entities[i];
+                    ecs_entity_t ent1 = qit.entities[j];
+
+                    if (world_rect_overlap(&rect0, &rect1)) {
+                        bool started = add_contact(ent0, ent1);
+
+                        if (started) {
+                            if (r->on_contact_start) {
+                                r->on_contact_start(it->world, ent0, ent1);
+                            }
+                        } else {
+                            if (r->on_contact_continue) {
+                                r->on_contact_continue(it->world, ent0, ent1);
+                            }
                         }
                     } else {
-                        if (r->on_contact_continue) {
-                            r->on_contact_continue(it->world, ent0, ent1);
+                        bool ended = del_contact(ent0, ent1);
+
+                        if (ended) {
+                            if (r->on_contact_stop) {
+                                r->on_contact_stop(it->world, ent0, ent1);
+                            }
                         }
                     }
-                } else {
-                    bool ended = del_contact(ent0, ent1);
+                }
+            }
+        }
+    } else {
+        for (int32_t i = 0; i < it->count; ++i) {
+            const PhysBox* box0 = ecs_get_w_id(it->world, it->entities[i], comp);
+            if (!box0) {
+                continue;
+            }
 
-                    if (ended) {
-                        if (r->on_contact_stop) {
-                            r->on_contact_stop(it->world, ent0, ent1);
+            struct world_rect rect0;
+            box_to_world_rect(pos[i], box0->size, &rect0);
+
+            PhysReceiver* r = receiver;
+            if (ecs_is_owned(it, 2)) {
+                r = &receiver[i];
+            }
+
+            ecs_iter_t qit = ecs_query_iter(query[i].boxes);
+            while (ecs_query_next(&qit)) {
+                Position* pos1 = ecs_term(&qit, Position, 1);
+                for (int32_t j = 0; j < qit.count; ++j) {
+                    const PhysBox* box1 = ecs_get_w_id(it->world, qit.entities[j], comp);
+                    struct world_rect rect1;
+                    box_to_world_rect(pos1[j], box1->size, &rect1);
+
+                    ecs_entity_t ent0 = it->entities[i];
+                    ecs_entity_t ent1 = qit.entities[j];
+
+                    if (world_rect_overlap(&rect0, &rect1)) {
+                        bool started = add_contact(ent0, ent1);
+
+                        if (started) {
+                            if (r->on_contact_start) {
+                                r->on_contact_start(it->world, ent0, ent1);
+                            }
+                        } else {
+                            if (r->on_contact_continue) {
+                                r->on_contact_continue(it->world, ent0, ent1);
+                            }
+                        }
+                    } else {
+                        bool ended = del_contact(ent0, ent1);
+
+                        if (ended) {
+                            if (r->on_contact_stop) {
+                                r->on_contact_stop(it->world, ent0, ent1);
+                            }
                         }
                     }
                 }
@@ -214,6 +275,46 @@ void physics_fini(ecs_world_t* world, void* ctx)
     hmfree(contacts_map);
 }
 
+void AttachBoxWorldBounds(ecs_iter_t* it)
+{
+    ecs_id_t ecs_id(PhysWorldBounds) = ecs_term_id(it, 2);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        ecs_set(
+            it->world,
+            it->entities[i],
+            PhysWorldBounds,
+            {-INFINITY, -INFINITY, INFINITY, INFINITY});
+    }
+}
+
+void UpdateBoxWorldBounds(ecs_iter_t* it)
+{
+    const Position* position = ecs_term(it, Position, 1);
+    const PhysCollider* collider = ecs_term(it, PhysCollider, 2);
+    ecs_id_t ecs_id(PhysCollider) = ecs_term_id(it, 2);
+    ecs_id_t ecs_id(PhysBox) = ecs_entity_t_lo(ecs_id(PhysCollider));
+
+    PhysWorldBounds* bounds = ecs_term(it, PhysWorldBounds, 3);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        const PhysBox* box = ecs_get_w_id(it->world, it->entities[i], ecs_id(PhysBox));
+        box_to_bounds(position[i], box->size, &bounds[i].left);
+    }
+}
+
+void WorldBoundsView(ecs_iter_t* it)
+{
+    PhysWorldBounds* bounds = ecs_term(it, PhysWorldBounds, 1);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        draw_line_rect_col(
+            (vec2){bounds[i].left, bounds[i].top},
+            (vec2){bounds[i].right, bounds[i].bottom},
+            k_color_spring);
+    }
+}
+
 void PhysicsImport(ecs_world_t* world)
 {
     ECS_MODULE(world, Physics);
@@ -226,14 +327,18 @@ void PhysicsImport(ecs_world_t* world)
     ECS_COMPONENT(world, PhysReceiver);
     ECS_COMPONENT(world, PhysCollider);
     ECS_COMPONENT(world, PhysBox);
+    ECS_COMPONENT(world, PhysWorldBounds);
 
     // clang-format off
-    ECS_SYSTEM(world, BoxColliderView, EcsPostUpdate,
+    ECS_SYSTEM(world, BoxColliderView, EcsOnValidate,
         game.comp.Position, PAIR | physics.Collider > physics.Box);
-    ECS_SYSTEM(world, CreatePhysicsQueries, EcsOnSet, ANY:physics.Query);
+    ECS_SYSTEM(world, CreatePhysicsQueries, EcsOnSet, ANY:physics.Query, ?SHARED:physics.Query);
     ECS_SYSTEM(world, TestQueryContacts, EcsOnValidate,
         [in] ANY:physics.Query, [in] ANY:physics.Receiver,
         [in] PAIR | physics.Collider, game.comp.Position);
+    // ECS_SYSTEM(world, AttachBoxWorldBounds, EcsOnSet, [in] PAIR | physics.Collider > physics.Box, [out] !physics.WorldBounds);
+    // ECS_SYSTEM(world, UpdateBoxWorldBounds, EcsPostUpdate, game.comp.Position, [in] PAIR | physics.Collider > physics.Box, [out] physics.WorldBounds);
+    // ECS_SYSTEM(world, WorldBoundsView, EcsOnValidate, [in] physics.WorldBounds);
     // clang-format on
 
     ecs_enable(world, BoxColliderView, false);
