@@ -40,6 +40,7 @@ void* store_context(void* ctx, size_t size)
     uint8_t* storage = NULL;
     if (!find) {
         ptrdiff_t curr_size = context_mem_head - context_memory;
+        TX_ASSERT(curr_size + size < K_CONTEXT_MEM_MAX_SIZE);
         if (curr_size + size >= K_CONTEXT_MEM_MAX_SIZE) {
             return NULL;
         }
@@ -82,26 +83,95 @@ void unload_context(void* ctx, size_t size)
 
 typedef struct debug_panel_context {
     ecs_query_t* q_debug_windows;
+    ecs_world_stats_t* stats;
     ECS_DECLARE_COMPONENT(Position);
 } debug_panel_context;
+
+static ecs_world_stats_t world_stats;
+
+struct plot_marker {
+    float value;
+    ImU32 color;
+};
+
+enum { K_PLOT_DESC_MAX_MARKERS = 16 };
+
+struct gauge_plot_desc {
+    const ecs_gauge_t* gauge;
+    const char* title;
+    ImVec2 size;
+    float vmin;
+    float vmax;
+    struct plot_marker markers[K_PLOT_DESC_MAX_MARKERS];
+};
+
+void plot_ecs_guage(int32_t t, const struct gauge_plot_desc* desc)
+{
+    if (!desc) {
+        return;
+    }
+
+    igText(desc->title);
+
+    const float spacing = desc->size.x / ECS_STAT_WINDOW;
+
+    igBeginChildEx(desc->title, igGetIDStr(desc->title), desc->size, true, ImGuiWindowFlags_None);
+    {
+        ImDrawList* draw_list = igGetWindowDrawList();
+
+        ImVec2 pos;
+        igGetCursorScreenPos(&pos);
+
+        float top = pos.y;
+        float bottom = pos.y + desc->size.y;
+        float left = pos.x;
+        float right = pos.x + desc->size.x;
+
+        for (int32_t m = 0; m < K_PLOT_DESC_MAX_MARKERS; ++m) {
+            ImU32 color = desc->markers[m].color;
+            if (color == 0) break;
+
+            float value = desc->markers[m].value;
+            float y = bottom - inv_lerp(desc->vmin, desc->vmax, value) * desc->size.y;
+
+            ImDrawList_AddLine(draw_list, (ImVec2){left, y}, (ImVec2){right, y}, color, 1.0f);
+        }
+
+        for (int i = 0; i < ECS_STAT_WINDOW - 1; ++i) {
+            int i0 = (t + i + 1) % ECS_STAT_WINDOW;
+            int i1 = (t + i + 2) % ECS_STAT_WINDOW;
+
+            float v0 = desc->gauge->avg[i0];
+            float v1 = desc->gauge->avg[i1];
+
+            float x0 = pos.x + i * spacing;
+            float y0 = bottom - inv_lerp(desc->vmin, desc->vmax, v0) * desc->size.y;
+            float x1 = pos.x + (i + 1) * spacing;
+            float y1 = bottom - inv_lerp(desc->vmin, desc->vmax, v1) * desc->size.y;
+
+            ImDrawList_AddLine(draw_list, (ImVec2){x0, y0}, (ImVec2){x1, y1}, 0xFFFFFFFF, 2.0f);
+        }
+    }
+    igEndChild();
+}
 
 void debug_panel_gui(ecs_world_t* world, void* ctx)
 {
     debug_panel_context* context = (debug_panel_context*)ctx;
 
-    ecs_world_stats_t stats;
-    ecs_get_world_stats(world, &stats);
+    ecs_get_world_stats(world, context->stats);
+    ecs_world_stats_t* stats = context->stats;
 
-    ecs_type_t ecs_type(Position) = context->ecs_type(Position);
-    ecs_id_t ecs_id(Position) = context->ecs_id(Position);
-
+    DEBUG_PANEL_LOAD_COMPONENT(context, Position);
     igLabelText("Entity Count", "%d", ecs_count(world, Position));
+    igLabelText("FPS", "%0.0f", stats->fps.max[stats->t]);
 
-    igBeginChildEx("Panels", 42, (ImVec2){-1, -1}, true, ImGuiWindowFlags_None);
+    if (!context->q_debug_windows) {
+        return;
+    }
+
+    igBeginChildEx("Panels", 42, (ImVec2){-1, 200}, true, ImGuiWindowFlags_None);
     {
-        if (!context->q_debug_windows) {
-            return;
-        }
 
         ecs_iter_t it = ecs_query_iter(context->q_debug_windows);
         while (ecs_query_next(&it)) {
@@ -112,12 +182,95 @@ void debug_panel_gui(ecs_world_t* world, void* ctx)
                 }
 
                 {
-                    char buf[256];
-                    snprintf(buf, 256, "%s (%s)", window[i].name, window[i].shortcut_str);
+                    char buf[128];
+                    snprintf(buf, 128, "%s (%s)", window[i].name, window[i].shortcut_str);
                     if (igCheckbox(buf, &window[i].is_visible)) {
                     }
                 }
             }
+        }
+    }
+    igEndChild();
+
+    plot_ecs_guage(
+        stats->t,
+        &(struct gauge_plot_desc){
+            .title = "FPS Plot",
+            .gauge = &stats->fps,
+            .size = (ImVec2){360.f, 100.f},
+            .vmin = 0,
+            .vmax = 160,
+            .markers = {
+                [0] = {.value = 144.0f, .color = 0xFFFFFF00},
+                [1] = {.value = 120.0f, .color = 0xFF00FF00},
+                [2] = {.value = 60.0f, .color = 0xFF00FFFF},
+                [3] = {.value = 30.0f, .color = 0xFF0000FF},
+            }});
+
+    plot_ecs_guage(
+        stats->t,
+        &(struct gauge_plot_desc){
+            .title = "Frame time Plot",
+            .gauge = &stats->frame_time_total.rate,
+            .size = (ImVec2){360.f, 100.f},
+            .vmin = 0,
+            .vmax = 1.f / 15,
+            .markers = {
+                [0] = {.value = 1.0f / 30, .color = 0xFF0000FF},
+                [1] = {.value = 1.0f / 60, .color = 0xFF00FFFF},
+                [2] = {.value = 1.0f / 120, .color = 0xFF00FF00},
+                [3] = {.value = 1.0f / 144, .color = 0xFFFFFF00},
+            }});
+
+    const int bytes_per_block = 64;
+    const int total_blocks = K_CONTEXT_MEM_MAX_SIZE / bytes_per_block;
+    const float block_size = 16.0f;
+    const float separation = 2.0f;
+    igBeginChildEx(
+        "Debug Gui Contexts",
+        43,
+        (ImVec2){total_blocks * block_size + (block_size + separation) / 2.0f, block_size * 2.0f},
+        true,
+        ImGuiWindowFlags_None);
+    {
+        ImDrawList* draw_list = igGetWindowDrawList();
+
+        ImVec2 pos;
+        igGetCursorScreenPos(&pos);
+
+        const ptrdiff_t mem_size = context_mem_head - context_memory;
+
+        pos.x += (block_size + separation) / 2.0f;
+
+        for (int i = 0; i < total_blocks; ++i) {
+            float x = i * (block_size + separation) + pos.x;
+            float y = pos.y + (block_size + separation) / 2;
+            float perc = 0.0f;
+
+            ptrdiff_t curr_block = i * bytes_per_block;
+            ptrdiff_t next_block = (i + 1) * bytes_per_block;
+
+            if (curr_block < mem_size && next_block > mem_size) {
+                ptrdiff_t in_block = mem_size - curr_block;
+                perc = (float)in_block / bytes_per_block;
+            } else if (curr_block < mem_size) {
+                perc = 1.0f;
+            }
+
+            float block_hsize = block_size * 0.5f;
+            ImVec2 center = (ImVec2){x, y};
+            ImVec2 extents = (ImVec2){block_hsize, block_hsize};
+            ImVec2 full_p0 = (ImVec2){center.x - extents.x, center.y - extents.y};
+            ImVec2 full_p1 = (ImVec2){center.x + extents.x, center.y + extents.y};
+
+            ImVec2 sub_extents = (ImVec2){extents.x * perc, extents.y * perc};
+            ImVec2 sub_p0 = (ImVec2){center.x - sub_extents.x, center.y - sub_extents.y};
+            ImVec2 sub_p1 = (ImVec2){center.x + sub_extents.x, center.y + sub_extents.y};
+
+            ImDrawList_AddRectFilled(
+                draw_list, full_p0, full_p1, 0xFFFFFF00, 0.0f, ImDrawCornerFlags_None);
+            ImDrawList_AddRectFilled(
+                draw_list, sub_p0, sub_p1, 0xFFFF00FF, 0.0f, ImDrawCornerFlags_None);
         }
     }
     igEndChild();
@@ -179,9 +332,22 @@ void DebugGuiImport(ecs_world_t* world)
     ECS_SYSTEM(world, UnloadDebugWindowContext, EcsUnSet, DebugWindow);
     ECS_SYSTEM(world, UpdateDebugWindows, EcsPreStore, DebugWindow);
 
+    ECS_IMPORT(world, GameComp);
+
+    world_stats = (ecs_world_stats_t){0};
+
     ecs_query_t* query = ecs_query_new(world, "debug.gui.Window");
     DEBUG_PANEL(
-        world, DebugPanel, "`", debug_panel_gui, debug_panel_context, {.q_debug_windows = query});
+        world,
+        DebugPanel,
+        "`",
+        debug_panel_gui,
+        debug_panel_context,
+        {
+            .q_debug_windows = query,
+            .stats = &world_stats,
+            DEBUG_PANEL_STORE_COMPONENT(world, Position, "game.comp.Position"),
+        });
 
     ECS_EXPORT_COMPONENT(DebugWindow);
 }

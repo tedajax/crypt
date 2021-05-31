@@ -9,7 +9,9 @@
 			"*.h": "c",
 			"*.c": "c",
 			"imgui*": "cpp",
-			"compare": "c"
+			"compare": "c",
+			"type_traits": "c",
+			"xtr1common": "c"
 		}
 	}
 }

@@ -463,6 +463,10 @@ void InvaderRootControl(ecs_iter_t* it)
     }
     context->invaders_alive = num_alive_invaders;
 
+    if (context->invaders_alive == 0) {
+        return;
+    }
+
     int32_t num_invaders = config->invader_rows * config->invader_cols;
     float invader_ratio = (float)num_alive_invaders / num_invaders;
     vec2 vel = (vec2){
@@ -650,10 +654,13 @@ void TankGunControl(ecs_iter_t* it)
 
             vec2 pos = gun_pos[i]; // vec2_add(tank_pos[i], gun_pos[i]);
 
-            ecs_entity_t projectile = ecs_new_w_pair(it->world, EcsIsA, config->projectile_prefab);
-            ecs_set(it->world, projectile, Position, {.x = pos.x, .y = pos.y - 1.0f});
-            ecs_set(it->world, projectile, Velocity, {.x = 0.0f, .y = -64.0f});
-            ecs_set_trait(it->world, projectile, PhysBox, PhysCollider, {.layer = 0});
+            for (int32_t b = -1; b <= 1; ++b) {
+                ecs_entity_t projectile =
+                    ecs_new_w_pair(it->world, EcsIsA, config->projectile_prefab);
+                ecs_set(it->world, projectile, Position, {.x = pos.x, .y = pos.y - 1.0f});
+                ecs_set(it->world, projectile, Velocity, {.x = b * 2.0f, .y = -64.0f});
+                ecs_set_trait(it->world, projectile, PhysBox, PhysCollider, {.layer = 0});
+            }
         }
     }
 }

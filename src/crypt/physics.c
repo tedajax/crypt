@@ -236,6 +236,8 @@ void PhysicsImport(ecs_world_t* world)
         [in] PAIR | physics.Collider, game.comp.Position);
     // clang-format on
 
+    ecs_enable(world, BoxColliderView, false);
+
     ECS_IMPORT(world, DebugGui);
 
     DEBUG_PANEL(
