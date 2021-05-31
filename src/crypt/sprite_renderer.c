@@ -808,6 +808,19 @@ void GatherSprites(ecs_iter_t* it)
 
 #include "tx_input.h"
 
+int sprite_cmp(const void* a, const void* b)
+{
+    struct sprite* s0 = (struct sprite*)a;
+    struct sprite* s1 = (struct sprite*)b;
+    if (s0->pos.z < s1->pos.z) {
+        return -1;
+    } else if (s0->pos.z > s1->pos.z) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
 void Render(ecs_iter_t* it)
 {
     ecs_world_t* world = it->world;
@@ -824,6 +837,8 @@ void Render(ecs_iter_t* it)
 
         r->resources.canvas.bindings.vertex_buffers[1] = r->resources.inst_vbuf;
     }
+
+    qsort(r->sprites, arrlen(r->sprites), sizeof(struct sprite), sprite_cmp);
 
     sg_update_buffer(
         r->resources.inst_vbuf, r->sprites, (int)(sizeof(struct sprite) * arrlenu(r->sprites)));
