@@ -14608,7 +14608,8 @@ const ecs_entity_t EcsOnValidate = (ECS_HI_COMPONENT_ID + 32);
 const ecs_entity_t EcsPostUpdate = (ECS_HI_COMPONENT_ID + 33);
 const ecs_entity_t EcsPreStore = (ECS_HI_COMPONENT_ID + 34);
 const ecs_entity_t EcsOnStore = (ECS_HI_COMPONENT_ID + 35);
-const ecs_entity_t EcsPostFrame = (ECS_HI_COMPONENT_ID + 36);
+const ecs_entity_t EcsPostStore = (ECS_HI_COMPONENT_ID + 36);
+const ecs_entity_t EcsPostFrame = (ECS_HI_COMPONENT_ID + 37);
 
 
 /* -- Private functions -- */
@@ -25437,6 +25438,7 @@ void FlecsPipelineImport(
     ecs_bootstrap_tag(world, EcsPostUpdate);
     ecs_bootstrap_tag(world, EcsPreStore);
     ecs_bootstrap_tag(world, EcsOnStore);
+    ecs_bootstrap_tag(world, EcsPostStore);
     ecs_bootstrap_tag(world, EcsPostFrame);
 
     ECS_TYPE_IMPL(EcsPipelineQuery);
@@ -25458,7 +25460,7 @@ void FlecsPipelineImport(
         },
         .ids = {
             EcsPreFrame, EcsOnLoad, EcsPostLoad, EcsPreUpdate, EcsOnUpdate,
-            EcsOnValidate, EcsPostUpdate, EcsPreStore, EcsOnStore, EcsPostFrame
+            EcsOnValidate, EcsPostUpdate, EcsPreStore, EcsOnStore, EcsPostStore, EcsPostFrame
          }
     });
 

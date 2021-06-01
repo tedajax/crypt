@@ -82,27 +82,69 @@ struct contact* get_contact_map(ecs_entity_t ent)
     return hmget(contacts_map, ent);
 }
 
-bool add_contact(ecs_entity_t ent, ecs_entity_t contact)
+bool add_contact(ecs_entity_t e0, ecs_entity_t e1)
 {
-    struct contact* contact_map = get_contact_map(ent);
-    if (hmget(contact_map, contact) == false) {
-        hmput(contact_map, contact, true);
-        hmput(contacts_map, ent, contact_map);
+    struct contact* map0 = get_contact_map(e0);
+    struct contact* map1 = get_contact_map(e1);
+
+    TX_ASSERT(hmget(map0, e1) == hmget(map1, e0));
+
+    if (hmget(map0, e1) == false) {
+        hmput(map0, e1, true);
+        hmput(contacts_map, e0, map0);
+        hmput(map1, e0, true);
+        hmput(contacts_map, e1, map1);
         return true;
     }
+
     return false;
 }
 
-bool del_contact(ecs_entity_t ent, ecs_entity_t contact)
+bool del_contact(ecs_entity_t e0, ecs_entity_t e1)
 {
-    struct contact* contact_map = get_contact_map(ent);
+    struct contact* map0 = get_contact_map(e0);
+    struct contact* map1 = get_contact_map(e1);
 
-    if (hmget(contact_map, contact) == true) {
-        hmput(contact_map, contact, false);
-        hmput(contacts_map, ent, contact_map);
+    TX_ASSERT(hmget(map0, e1) == hmget(map1, e0));
+
+    if (hmget(map0, e1) == true) {
+        hmdel(map0, e1);
+        hmput(contacts_map, e0, map0);
+        hmdel(map1, e0);
+        hmput(contacts_map, e1, map1);
         return true;
     }
+
     return false;
+}
+
+bool in_contact(ecs_entity_t e0, ecs_entity_t e1)
+{
+    struct contact* map0 = get_contact_map(e0);
+    struct contact* map1 = get_contact_map(e1);
+
+    TX_ASSERT(hmget(map0, e1) == hmget(map1, e0));
+
+    return hmget(map0, e1) == true;
+}
+
+bool has_contact(ecs_entity_t ent)
+{
+    struct contact* map = get_contact_map(ent);
+    return hmlen(map) > 0;
+}
+
+void del_phys_ent(ecs_entity_t ent)
+{
+    struct contact* map = get_contact_map(ent);
+
+    size_t len = hmlen(map);
+    for (size_t i = 0; i < len; ++i) {
+        struct contact* m = get_contact_map(map[i].value);
+        hmdel(m, ent);
+    }
+
+    hmdel(contacts_map, ent);
 }
 
 #define K_SHAPE_EXPR                                                                               \
@@ -271,14 +313,18 @@ void physics_fini(ecs_world_t* world, void* ctx)
 
 void AttachBoxWorldBounds(ecs_iter_t* it)
 {
-    ecs_id_t ecs_id(PhysWorldBounds) = ecs_term_id(it, 2);
+    const Position* position = ecs_term(it, Position, 1);
+    const PhysCollider* collider = ecs_term(it, PhysCollider, 2);
+    ecs_id_t ecs_id(PhysCollider) = ecs_term_id(it, 2);
+    ecs_id_t ecs_id(PhysWorldBounds) = ecs_term_id(it, 3);
+    ecs_id_t ecs_id(PhysBox) = ecs_entity_t_lo(ecs_id(PhysCollider));
 
     for (int32_t i = 0; i < it->count; ++i) {
-        ecs_set(
-            it->world,
-            it->entities[i],
-            PhysWorldBounds,
-            {-INFINITY, -INFINITY, INFINITY, INFINITY});
+        const PhysBox* box = ecs_get_w_id(it->world, it->entities[i], ecs_id(PhysBox));
+        PhysWorldBounds bounds;
+        box_to_bounds(position[i], box->size, &bounds.left);
+
+        ecs_set_ptr(it->world, it->entities[i], PhysWorldBounds, &bounds);
     }
 }
 
@@ -301,11 +347,134 @@ void WorldBoundsView(ecs_iter_t* it)
 {
     PhysWorldBounds* bounds = ecs_term(it, PhysWorldBounds, 1);
 
+    draw_set_prim_layer(0.0f);
+
     for (int32_t i = 0; i < it->count; ++i) {
+        vec4 col = k_color_spring;
+        if (has_contact(it->entities[i])) col = k_color_violet;
+
         draw_line_rect_col(
-            (vec2){bounds[i].left, bounds[i].top},
-            (vec2){bounds[i].right, bounds[i].bottom},
-            k_color_spring);
+            (vec2){bounds[i].left, bounds[i].top}, (vec2){bounds[i].right, bounds[i].bottom}, col);
+    }
+}
+
+void contact_start(ecs_world_t* world, ecs_entity_t e0, ecs_entity_t e1)
+{
+    // const char* name0 = ecs_get_name(world, e0);
+    // const char* name1 = ecs_get_name(world, e1);
+    // ecs_logf(world, "start: %s(0x%08X), %s(0x%08X)", name0, e0, name1, e1);
+}
+void contact_continue(ecs_world_t* world, ecs_entity_t e0, ecs_entity_t e1)
+{
+    const char* name0 = ecs_get_name(world, e0);
+    const char* name1 = ecs_get_name(world, e1);
+    // ecs_logf(world, "stay: %s(0x%08X), %s(0x%08X)", name0, e0, name1, e1);
+    // ecs_delete(world, e0);
+    // ecs_delete(world, e1);
+}
+void contact_stop(ecs_world_t* world, ecs_entity_t e0, ecs_entity_t e1)
+{
+    const char* name0 = ecs_get_name(world, e0);
+    const char* name1 = ecs_get_name(world, e1);
+    // ecs_logf(world, "stop: %s(0x%08X), %s(0x%08X)", name0, e0, name1, e1);
+    // ecs_delete(world, e0);
+    // ecs_delete(world, e1);
+}
+
+struct physics_ent {
+    ecs_entity_t ent;
+    PhysWorldBounds bounds;
+    uint8_t layer;
+};
+
+struct physics_ent* physics_ents = NULL;
+
+void ClearColliders(ecs_iter_t* it)
+{
+    arrsetlen(physics_ents, 0);
+}
+
+void GatherColliders(ecs_iter_t* it)
+{
+    const PhysWorldBounds* bounds = ecs_term(it, PhysWorldBounds, 1);
+    const PhysCollider* collider = ecs_term(it, PhysCollider, 3);
+
+    for (int32_t i = 0; i < it->count; ++i) {
+        arrput(
+            physics_ents,
+            ((struct physics_ent){
+                .ent = it->entities[i],
+                .bounds = bounds[i],
+                .layer = collider[i].layer,
+            }));
+    }
+}
+
+void UpdateContactEvents(ecs_iter_t* it)
+{
+    PhysReceiver* r = ecs_term(it, PhysReceiver, 1);
+
+    int32_t len = (int32_t)arrlen(physics_ents);
+    for (int32_t i = 0; i < len - 1; ++i) {
+        for (int32_t j = i + 1; j < len; ++j) {
+            struct physics_ent* a = &physics_ents[i];
+            struct physics_ent* b = &physics_ents[j];
+
+            if (a->layer == b->layer) {
+                continue;
+            }
+
+            ecs_entity_t ent0 = a->ent;
+            ecs_entity_t ent1 = b->ent;
+
+            if (phys_bounds_overlap(&a->bounds, &b->bounds)) {
+                bool started = add_contact(ent0, ent1);
+
+                if (started) {
+                    // ecs_logf(
+                    //     it->world,
+                    //     "[a] l: %0.2f r: %0.2f t: %0.2f b: %0.2f",
+                    //     a->bounds.left,
+                    //     a->bounds.right,
+                    //     a->bounds.top,
+                    //     a->bounds.bottom);
+                    // ecs_logf(
+                    //     it->world,
+                    //     "[b] l: %0.2f r: %0.2f t: %0.2f b: %0.2f",
+                    //     b->bounds.left,
+                    //     b->bounds.right,
+                    //     b->bounds.top,
+                    //     b->bounds.bottom);
+                    if (r->on_contact_start) {
+                        if (ecs_filter_match_entity(it->world, &r->filter, ent0)) {
+                            r->on_contact_start(it->world, ent0, ent1);
+                        }
+                        if (ecs_filter_match_entity(it->world, &r->filter, ent1)) {
+                            r->on_contact_start(it->world, ent1, ent0);
+                        }
+                    }
+                } else {
+                    if (r->on_contact_continue) {
+                        r->on_contact_continue(it->world, ent0, ent1);
+                    }
+                }
+            } else {
+                bool ended = del_contact(ent0, ent1);
+
+                if (ended) {
+                    if (r->on_contact_stop) {
+                        r->on_contact_stop(it->world, ent0, ent1);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void RemovePhysEnt(ecs_iter_t* it)
+{
+    for (int32_t i = 0; i < it->count; ++i) {
+        del_phys_ent(it->entities[i]);
     }
 }
 
@@ -316,25 +485,53 @@ void PhysicsImport(ecs_world_t* world)
     ecs_atfini(world, physics_fini, NULL);
 
     ecs_set_name_prefix(world, "Phys");
-
     ECS_COMPONENT(world, PhysQuery);
     ECS_COMPONENT(world, PhysReceiver);
     ECS_COMPONENT(world, PhysCollider);
     ECS_COMPONENT(world, PhysBox);
     ECS_COMPONENT(world, PhysWorldBounds);
 
+    ECS_TAG(world, ClearPhysEnts);
+    ECS_ENTITY(world, ClearEnt, ClearPhysEnts);
+
     // clang-format off
-    ECS_SYSTEM(world, BoxColliderView, EcsOnValidate,
+    ECS_SYSTEM(world, BoxColliderView, EcsPreStore,
         game.comp.Position, PAIR | physics.Collider > physics.Box);
+    ECS_SYSTEM(world, WorldBoundsView, EcsPreStore, [in] physics.WorldBounds);
+    
     ECS_SYSTEM(world, CreatePhysicsQueries, EcsOnSet, ANY:physics.Query, ?SHARED:physics.Query);
-    ECS_SYSTEM(world, TestQueryContacts, EcsOnValidate,
-        [in] ANY:physics.Query, [in] ANY:physics.Receiver,
-        [in] physics.WorldBounds,
-        [in] PAIR | physics.Collider, game.comp.Position);
-    ECS_SYSTEM(world, AttachBoxWorldBounds, EcsOnSet, [in] PAIR | physics.Collider > physics.Box, [out] !physics.WorldBounds);
+    
+    // ECS_SYSTEM(world, TestQueryContacts, EcsPostUpdate,
+    //     [in] ANY:physics.Query, [in] ANY:physics.Receiver,
+    //     [in] physics.WorldBounds,
+    //     [in] PAIR | physics.Collider, game.comp.Position);
+    ECS_SYSTEM(world, ClearColliders, EcsPreUpdate, ClearPhysEnts);
+    ECS_SYSTEM(world, GatherColliders, EcsOnValidate, physics.WorldBounds, game.comp.Position, [in] PAIR | physics.Collider);
+    ECS_SYSTEM(world, UpdateContactEvents, EcsPreStore, SYSTEM:PhysReceiver);
+    ECS_SYSTEM(world, RemovePhysEnt, EcsUnSet, physics.WorldBounds, game.comp.Position, [in] PAIR | physics.Collider);
+    
+    ECS_SYSTEM(world, AttachBoxWorldBounds, EcsOnSet, [in] game.comp.Position, [in] PAIR | physics.Collider > physics.Box, [out] !physics.WorldBounds);
     ECS_SYSTEM(world, UpdateBoxWorldBounds, EcsPostUpdate, game.comp.Position, [in] PAIR | physics.Collider > physics.Box, [out] physics.WorldBounds);
-    ECS_SYSTEM(world, WorldBoundsView, EcsOnValidate, [in] physics.WorldBounds);
     // clang-format on
+
+    ecs_filter_t filter;
+    ecs_filter_init(
+        world,
+        &filter,
+        &(ecs_filter_desc_t){
+            .expr = "ANY:game.comp.Highlight",
+        });
+
+    ecs_set(
+        world,
+        UpdateContactEvents,
+        PhysReceiver,
+        {
+            .on_contact_start = contact_start,
+            .on_contact_continue = contact_continue,
+            .on_contact_stop = contact_stop,
+            .filter = filter,
+        });
 
     ecs_enable(world, BoxColliderView, false);
 

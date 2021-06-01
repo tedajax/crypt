@@ -14,6 +14,7 @@ typedef struct PhysReceiver {
     entity_contact_action_t on_contact_start;
     entity_contact_action_t on_contact_continue;
     entity_contact_action_t on_contact_stop;
+    ecs_filter_t filter;
 } PhysReceiver;
 
 typedef struct PhysCollider {

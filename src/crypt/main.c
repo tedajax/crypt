@@ -209,19 +209,6 @@ void invader_control_debug_gui(ecs_world_t* world, void* ctx)
     }
 }
 
-void ecs_logf(ecs_world_t* world, const char* fmt, ...)
-{
-    char buffer[512];
-
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(buffer, 512, fmt, args);
-    va_end(args);
-
-    const ecs_world_info_t* info = ecs_get_world_info(world);
-    printf("%04.2fs | %s\n", info->world_time_total, buffer);
-}
-
 void bullet_contact_start(ecs_world_t* world, ecs_entity_t self, ecs_entity_t other)
 {
     const DamageConfig* damage = ecs_get(world, self, DamageConfig);
@@ -264,14 +251,12 @@ int main(int argc, char* argv[])
     ECS_IMPORT(world, SpriteRenderer);
     ECS_IMPORT(world, Physics);
 
-    ECS_ENTITY(world, Root, system.sdl2.WindowConfig);
-
     ecs_entity_t window =
-        ecs_set(world, Root, WindowConfig, {.title = "crypt", .width = 1920, .height = 1080});
+        ecs_set(world, EcsWorld, WindowConfig, {.title = "crypt", .width = 1920, .height = 1080});
 
     ecs_entity_t render_config = ecs_set(
         world,
-        Root,
+        EcsWorld,
         SpriteRenderConfig,
         {
             .e_window = window,
@@ -280,7 +265,7 @@ int main(int argc, char* argv[])
             .canvas_height = 144,
         });
 
-    ecs_set(world, Root, ImguiDesc, {0});
+    ecs_set(world, EcsWorld, ImguiDesc, {0});
 
     ECS_COMPONENT_DEFINE(world, Target);
     ECS_COMPONENT_DEFINE(world, Bounds);
@@ -402,12 +387,15 @@ int main(int argc, char* argv[])
         PhysReceiver,
         {.on_contact_start = test_contact_start, .on_contact_stop = test_contact_stop});
 
-    ECS_ENTITY(world, Block, game.comp.Position, physics.Box, Hostile);
-    ecs_set(world, Block, Position, {.x = -5.0f, .y = 8.5f});
-    ecs_set(world, Block, PhysBox, {.size = {.x = 1.0f, .y = 1.0f}});
-    ecs_set_trait(world, Block, PhysBox, PhysCollider, {.layer = 1});
-
-    ECS_PREFAB(world, TankProjectilePrefab, Projectile, ExpireAfter, physics.Box, Friendly);
+    ECS_PREFAB(
+        world,
+        TankProjectilePrefab,
+        Projectile,
+        ExpireAfter,
+        physics.Box,
+        Friendly,
+        game.comp.Highlight);
+    ecs_set(world, TankProjectilePrefab, EcsName, {.value = "TankBullet"});
     ecs_set(world, TankProjectilePrefab, DamageConfig, {.amount = 1.0f});
     ecs_set(world, TankProjectilePrefab, PhysBox, {.size = {.x = 0.125f, .y = 0.25f}});
     ecs_set(world, TankProjectilePrefab, ExpireAfter, {.seconds = 0.75f});
@@ -430,8 +418,6 @@ int main(int argc, char* argv[])
         });
     ecs_set(world, TankGun, GunState, {0});
     ecs_set(world, TankGun, LocalPosition, {0, 0.25f});
-
-    ecs_set(world, TankControl, TankControlContext, {.bullet_prefab = TankProjectilePrefab});
 
     DEBUG_PANEL(
         world,
@@ -615,6 +601,11 @@ void AddInvaders(ecs_iter_t* it)
         ecs_set(it->world, invader_target, Position, {0});
 
         ecs_entity_t invader = ecs_new_w_pair(it->world, EcsIsA, config->invader_prefab);
+
+        char* buf = malloc(16 * sizeof(char));
+        snprintf(buf, 16, "invader_%03d", i);
+
+        ecs_set(it->world, invader, EcsName, {.alloc_value = buf});
         ecs_set(it->world, invader, InvaderTarget, {.target_ent = invader_target});
         ecs_set_ptr(it->world, invader, Position, &world_pos);
         ecs_set(it->world, invader, Velocity, {0});
@@ -682,7 +673,7 @@ void TankGunControl(ecs_iter_t* it)
 
             vec2 pos = gun_pos[i]; // vec2_add(tank_pos[i], gun_pos[i]);
 
-            for (int32_t b = -1; b <= 1; ++b) {
+            for (int32_t b = 0; b <= 0; ++b) {
                 ecs_entity_t projectile =
                     ecs_new_w_pair(it->world, EcsIsA, config->projectile_prefab);
                 ecs_set(it->world, projectile, Position, {.x = pos.x, .y = pos.y - 1.0f});

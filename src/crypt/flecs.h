@@ -3801,6 +3801,7 @@ FLECS_API extern const ecs_entity_t EcsOnValidate;
 FLECS_API extern const ecs_entity_t EcsPostUpdate;
 FLECS_API extern const ecs_entity_t EcsPreStore;
 FLECS_API extern const ecs_entity_t EcsOnStore;
+FLECS_API extern const ecs_entity_t EcsPostStore;
 FLECS_API extern const ecs_entity_t EcsPostFrame;
 
 /* Value used to quickly check if component is builtin. This is used to quickly
@@ -9207,6 +9208,7 @@ static const flecs::entity_t OnValidate = EcsOnValidate;
 static const flecs::entity_t PostUpdate = EcsPostUpdate;
 static const flecs::entity_t PreStore = EcsPreStore;
 static const flecs::entity_t OnStore = EcsOnStore;
+static const flecs::entity_t PostStore = EcsPostStore;
 static const flecs::entity_t PostFrame = EcsPostFrame;
 
 /** Builtin roles */
