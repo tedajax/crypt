@@ -232,6 +232,20 @@ void bullet_contact_start(ecs_world_t* world, ecs_entity_t self, ecs_entity_t ot
     ecs_delete(world, self);
 }
 
+void test_contact_start(ecs_world_t* world, ecs_entity_t self, ecs_entity_t other)
+{
+    ecs_id_t ecs_id(SpriteColor) = ecs_lookup_fullpath(world, "sprite.renderer.SpriteColor");
+
+    ecs_set(world, self, SpriteColor, {.color = k_color_rose});
+}
+
+void test_contact_stop(ecs_world_t* world, ecs_entity_t self, ecs_entity_t other)
+{
+    ecs_id_t ecs_id(SpriteColor) = ecs_lookup_fullpath(world, "sprite.renderer.SpriteColor");
+    ecs_type_t ecs_type(SpriteColor) = ecs_type_from_id(world, ecs_id(SpriteColor));
+    ecs_remove(world, self, SpriteColor);
+}
+
 int main(int argc, char* argv[])
 {
     txrng_seed((uint32_t)time(NULL));
@@ -241,6 +255,7 @@ int main(int argc, char* argv[])
 
     ecs_world_t* world = ecs_init_w_args(argc, argv);
     ecs_set_target_fps(world, 144.0f);
+    ecs_set_time_scale(world, 1.0f);
 
     ECS_IMPORT(world, GameComp);
     ECS_IMPORT(world, SystemSdl2);
@@ -369,15 +384,28 @@ int main(int argc, char* argv[])
         TankInput,
         sprite.renderer.Sprite,
         NoAutoMove);
-    ecs_set(world, Tank, Position, {.x = 0.0f, .y = 9.0f});
+    ecs_set(world, Tank, Position, {.x = 0.0f, .y = 8.5f});
     ecs_set(world, Tank, Velocity, {.x = 0.0f, .y = 0.0f});
     ecs_set(world, Tank, TankInput, {0});
     ecs_set(
         world,
         Tank,
         Sprite,
-        {.sprite_id = 0, .layer = 5.0f, .origin = (vec2){0.5f, 1.0f}, .width = 2, .height = 1});
+        {.sprite_id = 0, .layer = 5.0f, .origin = (vec2){0.5f, 0.5f}, .width = 2, .height = 1});
     ecs_set(world, Tank, TankConfig, {.bounds_x = 16.0f});
+    ecs_set(world, Tank, PhysBox, {.size = {.x = 1.0f, .y = 0.5f}});
+    ecs_set_trait(world, Tank, PhysBox, PhysCollider, {.layer = 0});
+    ecs_set(world, Tank, PhysQuery, {.sig = "!ANY:Friendly, ANY:Hostile"});
+    ecs_set(
+        world,
+        Tank,
+        PhysReceiver,
+        {.on_contact_start = test_contact_start, .on_contact_stop = test_contact_stop});
+
+    ECS_ENTITY(world, Block, game.comp.Position, physics.Box, Hostile);
+    ecs_set(world, Block, Position, {.x = -5.0f, .y = 8.5f});
+    ecs_set(world, Block, PhysBox, {.size = {.x = 1.0f, .y = 1.0f}});
+    ecs_set_trait(world, Block, PhysBox, PhysCollider, {.layer = 1});
 
     ECS_PREFAB(world, TankProjectilePrefab, Projectile, ExpireAfter, physics.Box, Friendly);
     ecs_set(world, TankProjectilePrefab, DamageConfig, {.amount = 1.0f});

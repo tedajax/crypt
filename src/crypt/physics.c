@@ -9,6 +9,11 @@ struct world_rect {
     float left, top, right, bottom;
 };
 
+bool phys_bounds_overlap(const PhysWorldBounds* a, const PhysWorldBounds* b)
+{
+    return a->left <= b->right && a->right >= b->left && a->top >= b->bottom && a->bottom <= b->top;
+}
+
 bool world_rect_overlap(const struct world_rect* a, const struct world_rect* b)
 {
     return a->left <= b->right && a->right >= b->left && a->top >= b->bottom && a->bottom <= b->top;
@@ -24,11 +29,10 @@ void box_to_world_rect(vec2 center, vec2 size, struct world_rect* out)
 
 void box_to_bounds(vec2 center, vec2 size, float bounds[4])
 {
-
     bounds[0] = center.x - size.x;
     bounds[1] = center.x + size.x;
-    bounds[2] = center.y - size.y;
-    bounds[3] = center.y + size.y;
+    bounds[2] = center.y + size.y;
+    bounds[3] = center.y - size.y;
 }
 
 void BoxColliderView(ecs_iter_t* it)
@@ -101,7 +105,8 @@ bool del_contact(ecs_entity_t ent, ecs_entity_t contact)
     return false;
 }
 
-#define K_SHAPE_EXPR "[in] game.comp.Position, [in] PAIR | physics.Collider > %s"
+#define K_SHAPE_EXPR                                                                               \
+    "[in] game.comp.Position, [in] physics.WorldBounds, [in] PAIR | physics.Collider > %s"
 
 void create_collider_queries(ecs_world_t* world, PhysQuery* query)
 {
@@ -143,38 +148,28 @@ void TestQueryContacts(ecs_iter_t* it)
 {
     PhysQuery* query = ecs_term(it, PhysQuery, 1);
     PhysReceiver* receiver = ecs_term(it, PhysReceiver, 2);
-    PhysCollider* collider = ecs_term(it, PhysCollider, 3);
-    ecs_entity_t trait = ecs_term_id(it, 3);
+    PhysWorldBounds* bounds = ecs_term(it, PhysWorldBounds, 3);
+    PhysCollider* collider = ecs_term(it, PhysCollider, 4);
+    ecs_entity_t trait = ecs_term_id(it, 4);
     ecs_entity_t comp = ecs_entity_t_lo(trait);
-    Position* pos = ecs_term(it, Position, 4);
+    Position* pos = ecs_term(it, Position, 5);
 
     if (!ecs_is_owned(it, 1)) {
-        ecs_iter_t qit = ecs_query_iter(query->boxes);
-        while (ecs_query_next(&qit)) {
-            for (int32_t j = 0; j < qit.count; ++j) {
-                Position* pos1 = ecs_term(&qit, Position, 1);
-                const PhysBox* box1 = ecs_get_w_id(it->world, qit.entities[j], comp);
-                struct world_rect rect1;
-                box_to_world_rect(pos1[j], box1->size, &rect1);
+        for (int32_t i = 0; i < it->count; ++i) {
+            ecs_entity_t ent0 = it->entities[i];
+            PhysReceiver* r = receiver;
+            if (ecs_is_owned(it, 2)) {
+                r = &receiver[i];
+            }
 
-                for (int32_t i = 0; i < it->count; ++i) {
-                    const PhysBox* box0 = ecs_get_w_id(it->world, it->entities[i], comp);
-                    if (!box0) {
-                        continue;
-                    }
-
-                    struct world_rect rect0;
-                    box_to_world_rect(pos[i], box0->size, &rect0);
-
-                    PhysReceiver* r = receiver;
-                    if (ecs_is_owned(it, 2)) {
-                        r = &receiver[i];
-                    }
-
-                    ecs_entity_t ent0 = it->entities[i];
+            ecs_iter_t qit = ecs_query_iter(query->boxes);
+            while (ecs_query_next(&qit)) {
+                Position* other_pos = ecs_term(&qit, Position, 1);
+                PhysWorldBounds* other_bounds = ecs_term(&qit, PhysWorldBounds, 2);
+                for (int32_t j = 0; j < qit.count; ++j) {
                     ecs_entity_t ent1 = qit.entities[j];
 
-                    if (world_rect_overlap(&rect0, &rect1)) {
+                    if (phys_bounds_overlap(&bounds[i], &other_bounds[j])) {
                         bool started = add_contact(ent0, ent1);
 
                         if (started) {
@@ -200,14 +195,7 @@ void TestQueryContacts(ecs_iter_t* it)
         }
     } else {
         for (int32_t i = 0; i < it->count; ++i) {
-            const PhysBox* box0 = ecs_get_w_id(it->world, it->entities[i], comp);
-            if (!box0) {
-                continue;
-            }
-
-            struct world_rect rect0;
-            box_to_world_rect(pos[i], box0->size, &rect0);
-
+            ecs_entity_t ent0 = it->entities[i];
             PhysReceiver* r = receiver;
             if (ecs_is_owned(it, 2)) {
                 r = &receiver[i];
@@ -215,16 +203,12 @@ void TestQueryContacts(ecs_iter_t* it)
 
             ecs_iter_t qit = ecs_query_iter(query[i].boxes);
             while (ecs_query_next(&qit)) {
-                Position* pos1 = ecs_term(&qit, Position, 1);
+                Position* other_pos = ecs_term(&qit, Position, 1);
+                PhysWorldBounds* other_bounds = ecs_term(&qit, PhysWorldBounds, 2);
                 for (int32_t j = 0; j < qit.count; ++j) {
-                    const PhysBox* box1 = ecs_get_w_id(it->world, qit.entities[j], comp);
-                    struct world_rect rect1;
-                    box_to_world_rect(pos1[j], box1->size, &rect1);
-
-                    ecs_entity_t ent0 = it->entities[i];
                     ecs_entity_t ent1 = qit.entities[j];
 
-                    if (world_rect_overlap(&rect0, &rect1)) {
+                    if (phys_bounds_overlap(&bounds[i], &other_bounds[j])) {
                         bool started = add_contact(ent0, ent1);
 
                         if (started) {
@@ -252,17 +236,27 @@ void TestQueryContacts(ecs_iter_t* it)
 }
 
 typedef struct physics_debug_gui_context {
-    ecs_entity_t debug_view_ent;
+    ecs_entity_t box_collider_view_ent;
+    ecs_entity_t world_bounds_view_ent;
 } physics_debug_gui_context;
 
 void physics_debug_gui(ecs_world_t* world, void* ctx)
 {
     physics_debug_gui_context* context = (physics_debug_gui_context*)ctx;
 
-    bool enabled = !ecs_has_entity(world, context->debug_view_ent, EcsDisabled);
+    igText("Debug Toggles");
+    {
+        bool enabled = !ecs_has_entity(world, context->box_collider_view_ent, EcsDisabled);
+        if (igCheckbox("Box Colliders", &enabled)) {
+            ecs_enable(world, context->box_collider_view_ent, enabled);
+        }
+    }
 
-    if (igCheckbox("Debug Colliders", &enabled)) {
-        ecs_enable(world, context->debug_view_ent, enabled);
+    {
+        bool enabled = !ecs_has_entity(world, context->world_bounds_view_ent, EcsDisabled);
+        if (igCheckbox("World Bounds", &enabled)) {
+            ecs_enable(world, context->world_bounds_view_ent, enabled);
+        }
     }
 }
 
@@ -335,10 +329,11 @@ void PhysicsImport(ecs_world_t* world)
     ECS_SYSTEM(world, CreatePhysicsQueries, EcsOnSet, ANY:physics.Query, ?SHARED:physics.Query);
     ECS_SYSTEM(world, TestQueryContacts, EcsOnValidate,
         [in] ANY:physics.Query, [in] ANY:physics.Receiver,
+        [in] physics.WorldBounds,
         [in] PAIR | physics.Collider, game.comp.Position);
-    // ECS_SYSTEM(world, AttachBoxWorldBounds, EcsOnSet, [in] PAIR | physics.Collider > physics.Box, [out] !physics.WorldBounds);
-    // ECS_SYSTEM(world, UpdateBoxWorldBounds, EcsPostUpdate, game.comp.Position, [in] PAIR | physics.Collider > physics.Box, [out] physics.WorldBounds);
-    // ECS_SYSTEM(world, WorldBoundsView, EcsOnValidate, [in] physics.WorldBounds);
+    ECS_SYSTEM(world, AttachBoxWorldBounds, EcsOnSet, [in] PAIR | physics.Collider > physics.Box, [out] !physics.WorldBounds);
+    ECS_SYSTEM(world, UpdateBoxWorldBounds, EcsPostUpdate, game.comp.Position, [in] PAIR | physics.Collider > physics.Box, [out] physics.WorldBounds);
+    ECS_SYSTEM(world, WorldBoundsView, EcsOnValidate, [in] physics.WorldBounds);
     // clang-format on
 
     ecs_enable(world, BoxColliderView, false);
@@ -351,7 +346,10 @@ void PhysicsImport(ecs_world_t* world)
         "shift+3",
         physics_debug_gui,
         physics_debug_gui_context,
-        {.debug_view_ent = BoxColliderView});
+        {
+            .box_collider_view_ent = BoxColliderView,
+            .world_bounds_view_ent = WorldBoundsView,
+        });
 
     ECS_EXPORT_COMPONENT(PhysQuery);
 

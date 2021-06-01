@@ -18,6 +18,8 @@ enum { K_CONTEXT_MEM_MAX_SIZE = 1024 };
 uint8_t context_memory[K_CONTEXT_MEM_MAX_SIZE];
 uint8_t* context_mem_head = context_memory;
 
+ecs_world_stats_t world_stats = {0};
+
 void* store_context(void* ctx, size_t size)
 {
     if (!ctx || !size) {
@@ -83,11 +85,8 @@ void unload_context(void* ctx, size_t size)
 
 typedef struct debug_panel_context {
     ecs_query_t* q_debug_windows;
-    ecs_world_stats_t* stats;
     ECS_DECLARE_COMPONENT(Position);
 } debug_panel_context;
-
-static ecs_world_stats_t world_stats;
 
 struct plot_marker {
     float value;
@@ -159,8 +158,8 @@ void debug_panel_gui(ecs_world_t* world, void* ctx)
 {
     debug_panel_context* context = (debug_panel_context*)ctx;
 
-    ecs_get_world_stats(world, context->stats);
-    ecs_world_stats_t* stats = context->stats;
+    ecs_get_world_stats(world, &world_stats);
+    ecs_world_stats_t* stats = &world_stats;
 
     DEBUG_PANEL_LOAD_COMPONENT(context, Position);
     igLabelText("Entity Count", "%d", ecs_count(world, Position));
@@ -334,8 +333,6 @@ void DebugGuiImport(ecs_world_t* world)
 
     ECS_IMPORT(world, GameComp);
 
-    world_stats = (ecs_world_stats_t){0};
-
     ecs_query_t* query = ecs_query_new(world, "debug.gui.Window");
     DEBUG_PANEL(
         world,
@@ -345,7 +342,6 @@ void DebugGuiImport(ecs_world_t* world)
         debug_panel_context,
         {
             .q_debug_windows = query,
-            .stats = &world_stats,
             DEBUG_PANEL_STORE_COMPONENT(world, Position, "game.comp.Position"),
         });
 

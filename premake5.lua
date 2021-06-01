@@ -46,6 +46,7 @@ project "crypt"
         system "Windows"
         defines { "_CRT_SECURE_NO_WARNINGS" }
         architecture "x86_64"
+        buildoptions { "/W3" }
 
     filter "platforms:Win32"
         system "Windows"
@@ -54,9 +55,11 @@ project "crypt"
 
     filter "configurations:Debug"
         links {"SDL2maind"}
-
+        optimize "Off"
+        
     filter "configurations:Release"
         links { "SDL2main" }
+        optimize "Full"
 
     filter "platforms:Linux64"
         system "Linux"

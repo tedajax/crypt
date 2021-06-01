@@ -7,8 +7,6 @@
 #include "system_sdl2.h"
 #include <SDL2/SDL.h>
 
-ECS_COMPONENT_DECLARE(Sprite);
-
 // private system structs
 struct sprite {
     vec3 pos;
@@ -655,7 +653,7 @@ int compare_sprite_layers(ecs_entity_t e1, const Sprite* s1, ecs_entity_t e2, co
 {
     if (s1->layer == s2->layer) {
         return 0;
-    } else if (s1->layer > s2->layer) {
+    } else if (s1->layer < s2->layer) {
         return -1;
     } else {
         return 1;
@@ -667,6 +665,7 @@ void AttachRenderer(ecs_iter_t* it)
     ecs_world_t* world = it->world;
     SpriteRenderConfig* config = ecs_term(it, SpriteRenderConfig, 1);
     ecs_entity_t ecs_typeid(Renderer) = ecs_term_id(it, 2);
+    ecs_id_t ecs_id(Sprite) = ecs_term_id(it, 3);
 
     ecs_entity_t ecs_typeid(Sdl2Window) = ecs_lookup_fullpath(world, "system.sdl2.Window");
 
@@ -838,7 +837,7 @@ void Render(ecs_iter_t* it)
         r->resources.canvas.bindings.vertex_buffers[1] = r->resources.inst_vbuf;
     }
 
-    qsort(r->sprites, arrlen(r->sprites), sizeof(struct sprite), sprite_cmp);
+    // qsort(r->sprites, arrlen(r->sprites), sizeof(struct sprite), sprite_cmp);
 
     sg_update_buffer(
         r->resources.inst_vbuf, r->sprites, (int)(sizeof(struct sprite) * arrlenu(r->sprites)));
@@ -963,7 +962,8 @@ void SpriteRendererImport(ecs_world_t* world)
     // clang-format off
     ECS_SYSTEM(world, AttachRenderer, EcsOnSet,
         [in] SpriteRenderConfig,
-        [out] :Renderer);
+        [out] :Renderer,
+        :Sprite);
     ECS_SYSTEM(world, DetachRenderer, EcsUnSet, Renderer);
 
     ECS_SYSTEM(world, RendererNewFrame, EcsPostLoad, Renderer);
