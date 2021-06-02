@@ -219,20 +219,6 @@ void bullet_contact_start(ecs_world_t* world, ecs_entity_t self, ecs_entity_t ot
     ecs_delete(world, self);
 }
 
-void test_contact_start(ecs_world_t* world, ecs_entity_t self, ecs_entity_t other)
-{
-    ecs_id_t ecs_id(SpriteColor) = ecs_lookup_fullpath(world, "sprite.renderer.SpriteColor");
-
-    ecs_set(world, self, SpriteColor, {.color = k_color_rose});
-}
-
-void test_contact_stop(ecs_world_t* world, ecs_entity_t self, ecs_entity_t other)
-{
-    ecs_id_t ecs_id(SpriteColor) = ecs_lookup_fullpath(world, "sprite.renderer.SpriteColor");
-    ecs_type_t ecs_type(SpriteColor) = ecs_type_from_id(world, ecs_id(SpriteColor));
-    ecs_remove(world, self, SpriteColor);
-}
-
 int main(int argc, char* argv[])
 {
     txrng_seed((uint32_t)time(NULL));
@@ -380,11 +366,6 @@ int main(int argc, char* argv[])
     ecs_set(world, Tank, TankConfig, {.bounds_x = 16.0f});
     ecs_set(world, Tank, PhysBox, {.size = {.x = 1.0f, .y = 0.5f}});
     ecs_set_trait(world, Tank, PhysBox, PhysCollider, {.layer = 0});
-    ecs_set(
-        world,
-        Tank,
-        PhysReceiver,
-        {.on_contact_start = test_contact_start, .on_contact_stop = test_contact_stop});
 
     ECS_PREFAB(
         world,
@@ -398,12 +379,23 @@ int main(int argc, char* argv[])
     ecs_set(world, TankProjectilePrefab, DamageConfig, {.amount = 1.0f});
     ecs_set(world, TankProjectilePrefab, PhysBox, {.size = {.x = 0.125f, .y = 0.25f}});
     ecs_set(world, TankProjectilePrefab, ExpireAfter, {.seconds = 0.75f});
-    ecs_set(world, TankProjectilePrefab, PhysReceiver, {.on_contact_start = bullet_contact_start});
     ecs_set(
         world,
         TankProjectilePrefab,
         Sprite,
         {.sprite_id = 16, .width = 1, .height = 1, .origin = {0.5f, 0.5f}, .layer = 4.0f});
+
+    ECS_ENTITY(world, ProjectilePhysReceiver, physics.Receiver);
+    ecs_filter_t bullet_filter;
+    ecs_filter_init(world, &bullet_filter, &(ecs_filter_desc_t){.expr = "INSTANCEOF | TankBullet"});
+    ecs_set(
+        world,
+        ProjectilePhysReceiver,
+        PhysReceiver,
+        {
+            .on_contact_start = bullet_contact_start,
+            .filter = bullet_filter,
+        });
 
     ECS_ENTITY(world, TankGun, CHILDOF | Tank, game.comp.Position, GunConfig, GunState);
     ecs_set(
@@ -412,7 +404,7 @@ int main(int argc, char* argv[])
         GunConfig,
         {
             .projectile_prefab = TankProjectilePrefab,
-            .shot_interval = 0.1f,
+            .shot_interval = 0.01f,
         });
     ecs_set(world, TankGun, GunState, {0});
     ecs_set(world, TankGun, LocalPosition, {0, 0.25f});
@@ -671,7 +663,7 @@ void TankGunControl(ecs_iter_t* it)
 
             vec2 pos = gun_pos[i]; // vec2_add(tank_pos[i], gun_pos[i]);
 
-            for (int32_t b = 0; b <= 0; ++b) {
+            for (int32_t b = -1; b <= 1; ++b) {
                 ecs_entity_t projectile =
                     ecs_new_w_pair(it->world, EcsIsA, config->projectile_prefab);
                 ecs_set(it->world, projectile, Position, {.x = pos.x, .y = pos.y - 1.0f});

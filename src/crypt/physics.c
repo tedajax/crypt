@@ -108,8 +108,10 @@ bool contact_map_ents_in_contact(ecs_entity_t e0, ecs_entity_t e1)
 
 bool contact_map_ent_has_contacts(ecs_entity_t ent)
 {
-    struct contact_ent* contact_set = contact_map_get_ent_contact_set(ent);
-    return hmlen(contact_set) > 0;
+    if (hmgeti(contacts_map, ent) >= 0) {
+        return hmlen(hmget(contacts_map, ent)) > 0;
+    }
+    return false;
 }
 
 int32_t contact_map_remove_ent(ecs_entity_t removed, ecs_entity_t* contacts, int32_t n)
@@ -183,7 +185,8 @@ void contact_queues_init(void)
 {
     // Skip None, no need for a queue
     for (int i = ContactType_Start; i < ContactType_Count; ++i) {
-        arrsetcap(contact_queues[i], 256);
+        arrsetcap(contact_queues[i], 32);
+        size_t len = arrlen(contact_queues[i]);
     }
 }
 
@@ -250,17 +253,26 @@ void on_remove_ent(ecs_iter_t* it, PhysReceiver* r, ecs_entity_t e0, ecs_entity_
     ecs_entity_t nothing = e1; // e1 is only here to match the function pointer signature
 
     // queue for storing entities we'll need to notify
-    ecs_entity_t notify_queue[32] = {0};
+    ecs_entity_t notify_queue[8] = {0};
 
     // update contact map and add contacted entities to the queue
-    int32_t notify_len = contact_map_remove_ent(removed, notify_queue, 32);
+    int32_t notify_len = contact_map_remove_ent(removed, notify_queue, 8);
+
+    if (notify_len >= 8) {
+        ecs_warn("Notification limit hit, consider fixing this or weirdness is sure to occur");
+    }
 
     // iterate the queue
     for (int32_t n = 0; n < notify_len; ++n) {
         ecs_entity_t notify = notify_queue[n];
         for (int32_t i = 0; i < it->count; ++i) {
-            if (ecs_filter_match_entity(it->world, &r[i].filter, notify)) {
+            if (ecs_is_valid(it->world, notify)
+                && ecs_filter_match_entity(it->world, &r[i].filter, notify)) {
                 r[i].on_contact_stop(it->world, notify, removed);
+            }
+            if (ecs_is_valid(it->world, removed)
+                && ecs_filter_match_entity(it->world, &r[i].filter, removed)) {
+                r[i].on_contact_stop(it->world, removed, notify);
             }
         }
     }
@@ -269,10 +281,6 @@ void on_remove_ent(ecs_iter_t* it, PhysReceiver* r, ecs_entity_t e0, ecs_entity_
 void PhysicsNewFrame(ecs_iter_t* it)
 {
     arrsetlen(physics_ents, 0);
-
-    for (int i = ContactType_Start; i < ContactType_Count; ++i) {
-        arrsetlen(contact_queues[i], 0);
-    }
 }
 
 void GatherColliders(ecs_iter_t* it)
@@ -322,6 +330,8 @@ void UpdateContactEvents(ecs_iter_t* it)
                     type = ContactType_Stop;
                 }
             }
+
+            contact_queues_push(ent0, ent1, type);
         }
     }
 }
@@ -337,6 +347,7 @@ void ProcessContactQueues(ecs_iter_t* it)
             ecs_entity_t ent0 = queue[i].ent0, ent1 = queue[i].ent1;
             contact_type_notify_actions[qtype](it, r, ent0, ent1);
         }
+        arrsetlen(contact_queues[qtype], 0);
     }
 }
 
@@ -442,6 +453,11 @@ void physics_debug_gui(ecs_world_t* world, void* ctx)
         if (igCheckbox("World Bounds", &enabled)) {
             ecs_enable(world, context->world_bounds_view_ent, enabled);
         }
+    }
+
+    {
+        int32_t map_size = (int32_t)hmlen(contacts_map);
+        igText("Entities Tracking Contacts: %d", map_size);
     }
 }
 
