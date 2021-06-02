@@ -11,7 +11,11 @@
 			"imgui*": "cpp",
 			"compare": "c",
 			"type_traits": "c",
-			"xtr1common": "c"
+			"xtr1common": "c",
+			"concepts": "c",
+			"utility": "c",
+			"xstddef": "c",
+			"*.rh": "c"
 		}
 	}
 }

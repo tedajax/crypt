@@ -380,7 +380,6 @@ int main(int argc, char* argv[])
     ecs_set(world, Tank, TankConfig, {.bounds_x = 16.0f});
     ecs_set(world, Tank, PhysBox, {.size = {.x = 1.0f, .y = 0.5f}});
     ecs_set_trait(world, Tank, PhysBox, PhysCollider, {.layer = 0});
-    ecs_set(world, Tank, PhysQuery, {.sig = "!ANY:Friendly, ANY:Hostile"});
     ecs_set(
         world,
         Tank,
@@ -399,7 +398,6 @@ int main(int argc, char* argv[])
     ecs_set(world, TankProjectilePrefab, DamageConfig, {.amount = 1.0f});
     ecs_set(world, TankProjectilePrefab, PhysBox, {.size = {.x = 0.125f, .y = 0.25f}});
     ecs_set(world, TankProjectilePrefab, ExpireAfter, {.seconds = 0.75f});
-    ecs_set(world, TankProjectilePrefab, PhysQuery, {.sig = "!ANY:Friendly, ANY:Hostile"});
     ecs_set(world, TankProjectilePrefab, PhysReceiver, {.on_contact_start = bullet_contact_start});
     ecs_set(
         world,
@@ -414,7 +412,7 @@ int main(int argc, char* argv[])
         GunConfig,
         {
             .projectile_prefab = TankProjectilePrefab,
-            .shot_interval = 0.01f,
+            .shot_interval = 0.1f,
         });
     ecs_set(world, TankGun, GunState, {0});
     ecs_set(world, TankGun, LocalPosition, {0, 0.25f});

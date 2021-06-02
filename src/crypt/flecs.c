@@ -14605,11 +14605,12 @@ const ecs_entity_t EcsPostLoad = (ECS_HI_COMPONENT_ID + 29);
 const ecs_entity_t EcsPreUpdate = (ECS_HI_COMPONENT_ID + 30);
 const ecs_entity_t EcsOnUpdate = (ECS_HI_COMPONENT_ID + 31);
 const ecs_entity_t EcsOnValidate = (ECS_HI_COMPONENT_ID + 32);
-const ecs_entity_t EcsPostUpdate = (ECS_HI_COMPONENT_ID + 33);
-const ecs_entity_t EcsPreStore = (ECS_HI_COMPONENT_ID + 34);
-const ecs_entity_t EcsOnStore = (ECS_HI_COMPONENT_ID + 35);
-const ecs_entity_t EcsPostStore = (ECS_HI_COMPONENT_ID + 36);
-const ecs_entity_t EcsPostFrame = (ECS_HI_COMPONENT_ID + 37);
+const ecs_entity_t EcsPostValidate = (ECS_HI_COMPONENT_ID + 33);
+const ecs_entity_t EcsPostUpdate = (ECS_HI_COMPONENT_ID + 34);
+const ecs_entity_t EcsPreStore = (ECS_HI_COMPONENT_ID + 35);
+const ecs_entity_t EcsOnStore = (ECS_HI_COMPONENT_ID + 36);
+const ecs_entity_t EcsPostStore = (ECS_HI_COMPONENT_ID + 37);
+const ecs_entity_t EcsPostFrame = (ECS_HI_COMPONENT_ID + 38);
 
 
 /* -- Private functions -- */
@@ -25435,6 +25436,7 @@ void FlecsPipelineImport(
     ecs_bootstrap_tag(world, EcsPreUpdate);
     ecs_bootstrap_tag(world, EcsOnUpdate);
     ecs_bootstrap_tag(world, EcsOnValidate);
+    ecs_bootstrap_tag(world, EcsPostValidate);
     ecs_bootstrap_tag(world, EcsPostUpdate);
     ecs_bootstrap_tag(world, EcsPreStore);
     ecs_bootstrap_tag(world, EcsOnStore);
@@ -25460,7 +25462,7 @@ void FlecsPipelineImport(
         },
         .ids = {
             EcsPreFrame, EcsOnLoad, EcsPostLoad, EcsPreUpdate, EcsOnUpdate,
-            EcsOnValidate, EcsPostUpdate, EcsPreStore, EcsOnStore, EcsPostStore, EcsPostFrame
+            EcsOnValidate, EcsPostValidate, EcsPostUpdate, EcsPreStore, EcsOnStore, EcsPostStore, EcsPostFrame
          }
     });
 
