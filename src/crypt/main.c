@@ -2,6 +2,7 @@
 #include "debug_gui.h"
 #include "game_components.h"
 #include "physics.h"
+#include "profile.h"
 #include "sprite_renderer.h"
 #include "strhash.h"
 #include "system_imgui.h"
@@ -221,6 +222,8 @@ void bullet_contact_start(ecs_world_t* world, ecs_entity_t self, ecs_entity_t ot
 
 int main(int argc, char* argv[])
 {
+    PROFILE_INIT();
+
     txrng_seed((uint32_t)time(NULL));
     strhash_init();
 
@@ -430,7 +433,11 @@ int main(int argc, char* argv[])
     while (ecs_progress(world, 0.0f)) {
     }
 
-    return ecs_fini(world);
+    int result = ecs_fini(world);
+
+    PROFILE_TERMINATE();
+
+    return result;
 }
 
 void UpdatePositionHeirarchy(ecs_iter_t* it)

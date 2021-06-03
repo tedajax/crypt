@@ -1,13 +1,21 @@
 #include "physics.h"
 #include "debug_gui.h"
 #include "game_components.h"
+#include "profile.h"
 #include "sprite_renderer.h"
 #include "stb_ds.h"
 #include <ccimgui.h>
 
 bool phys_bounds_overlap(const PhysWorldBounds* a, const PhysWorldBounds* b)
 {
-    return a->left <= b->right && a->right >= b->left && a->top >= b->bottom && a->bottom <= b->top;
+    PROFILE_BEGIN(phys_bounds_overlap);
+
+    bool ret =
+        a->left <= b->right && a->right >= b->left && a->top >= b->bottom && a->bottom <= b->top;
+
+    PROFILE_END();
+
+    return ret;
 }
 
 void box_to_bounds(vec2 center, vec2 size, float bounds[4])
@@ -50,72 +58,106 @@ void contacts_map_free(void)
 
 struct contact_ent* contact_map_get_ent_contact_set(ecs_entity_t ent)
 {
+    PROFILE_BEGIN(contact_map_get_ent_contact_set);
+
+    struct contact_ent* ret = NULL;
+
     if (hmgeti(contacts_map, ent) < 0) {
         struct contact_ent* contact_map = NULL;
         hmdefault(contact_map, false);
         hmput(contacts_map, ent, contact_map);
-        return contact_map;
+        ret = contact_map;
     }
 
-    return hmget(contacts_map, ent);
+    ret = hmget(contacts_map, ent);
+
+    PROFILE_END();
+
+    return ret;
 }
 
 bool contact_map_add_contact(ecs_entity_t e0, ecs_entity_t e1)
 {
+    PROFILE_BEGIN(contact_map_add_contact);
+
     struct contact_ent* contact_set0 = contact_map_get_ent_contact_set(e0);
     struct contact_ent* contact_set1 = contact_map_get_ent_contact_set(e1);
 
     TX_ASSERT(hmget(contact_set0, e1) == hmget(contact_set1, e0));
+
+    bool ret = false;
 
     if (hmget(contact_set0, e1) == false) {
         hmput(contact_set0, e1, true);
         hmput(contacts_map, e0, contact_set0);
         hmput(contact_set1, e0, true);
         hmput(contacts_map, e1, contact_set1);
-        return true;
+        ret = true;
     }
 
-    return false;
+    PROFILE_END();
+
+    return ret;
 }
 
 bool contact_map_del_contact(ecs_entity_t e0, ecs_entity_t e1)
 {
+    PROFILE_BEGIN(contact_map_del_contact);
+
     struct contact_ent* contact_set0 = contact_map_get_ent_contact_set(e0);
     struct contact_ent* contact_set1 = contact_map_get_ent_contact_set(e1);
 
     TX_ASSERT(hmget(contact_set0, e1) == hmget(contact_set1, e0));
+
+    bool ret = false;
 
     if (hmget(contact_set0, e1) == true) {
         hmdel(contact_set0, e1);
         hmput(contacts_map, e0, contact_set0);
         hmdel(contact_set1, e0);
         hmput(contacts_map, e1, contact_set1);
-        return true;
+        ret = true;
     }
 
-    return false;
+    PROFILE_END();
+
+    return ret;
 }
 
 bool contact_map_ents_in_contact(ecs_entity_t e0, ecs_entity_t e1)
 {
+    PROFILE_BEGIN(contact_map_ents_in_contact);
+
     struct contact_ent* contact_set0 = contact_map_get_ent_contact_set(e0);
     struct contact_ent* contact_set1 = contact_map_get_ent_contact_set(e1);
 
     TX_ASSERT(hmget(contact_set0, e1) == hmget(contact_set1, e0));
 
-    return hmget(contact_set0, e1) == true;
+    bool ret = hmget(contact_set0, e1) == true;
+
+    PROFILE_END();
+
+    return ret;
 }
 
 bool contact_map_ent_has_contacts(ecs_entity_t ent)
 {
+    PROFILE_BEGIN(contact_map_ent_has_contacts);
+
+    bool ret = false;
     if (hmgeti(contacts_map, ent) >= 0) {
-        return hmlen(hmget(contacts_map, ent)) > 0;
+        ret = hmlen(hmget(contacts_map, ent)) > 0;
     }
-    return false;
+
+    PROFILE_END();
+
+    return ret;
 }
 
 int32_t contact_map_remove_ent(ecs_entity_t removed, ecs_entity_t* contacts, int32_t n)
 {
+    PROFILE_BEGIN(contact_map_remove_ent);
+
     int32_t ret = 0;
 
     struct contact_ent* removed_set = contact_map_get_ent_contact_set(removed);
@@ -133,6 +175,8 @@ int32_t contact_map_remove_ent(ecs_entity_t removed, ecs_entity_t* contacts, int
     }
 
     hmdel(contacts_map, removed);
+
+    PROFILE_END();
 
     return ret;
 }
@@ -212,6 +256,8 @@ void contact_queues_push_ent_remove(ecs_entity_t ent)
 // TODO: Surely I can figure out a more ECS way to do this...
 void on_contact_start(ecs_iter_t* it, PhysReceiver* r, ecs_entity_t e0, ecs_entity_t e1)
 {
+    PROFILE_BEGIN(on_contact_start);
+
     for (int32_t i = 0; i < it->count; ++i) {
         if (ecs_filter_match_entity(it->world, &r[i].filter, e0)) {
             r[i].on_contact_start(it->world, e0, e1);
@@ -220,10 +266,14 @@ void on_contact_start(ecs_iter_t* it, PhysReceiver* r, ecs_entity_t e0, ecs_enti
             r[i].on_contact_start(it->world, e1, e0);
         }
     }
+
+    PROFILE_END();
 }
 
 void on_contact_continue(ecs_iter_t* it, PhysReceiver* r, ecs_entity_t e0, ecs_entity_t e1)
 {
+    PROFILE_BEGIN(on_contact_continue);
+
     for (int32_t i = 0; i < it->count; ++i) {
         if (ecs_filter_match_entity(it->world, &r[i].filter, e0)) {
             r[i].on_contact_continue(it->world, e0, e1);
@@ -232,10 +282,14 @@ void on_contact_continue(ecs_iter_t* it, PhysReceiver* r, ecs_entity_t e0, ecs_e
             r[i].on_contact_continue(it->world, e1, e0);
         }
     }
+
+    PROFILE_END();
 }
 
 void on_contact_stop(ecs_iter_t* it, PhysReceiver* r, ecs_entity_t e0, ecs_entity_t e1)
 {
+    PROFILE_BEGIN(on_contact_stop);
+
     for (int32_t i = 0; i < it->count; ++i) {
         if (ecs_filter_match_entity(it->world, &r[i].filter, e0)) {
             r[i].on_contact_stop(it->world, e0, e1);
@@ -244,10 +298,14 @@ void on_contact_stop(ecs_iter_t* it, PhysReceiver* r, ecs_entity_t e0, ecs_entit
             r[i].on_contact_stop(it->world, e1, e0);
         }
     }
+
+    PROFILE_END();
 }
 
 void on_remove_ent(ecs_iter_t* it, PhysReceiver* r, ecs_entity_t e0, ecs_entity_t e1)
 {
+    PROFILE_BEGIN(on_remove_ent);
+
     ecs_entity_t removed = e0; // the entity that was deleted, we're going to notify entities in
                                // contact with the deleted entity that the contact has stopped.
     ecs_entity_t nothing = e1; // e1 is only here to match the function pointer signature
@@ -276,6 +334,8 @@ void on_remove_ent(ecs_iter_t* it, PhysReceiver* r, ecs_entity_t e0, ecs_entity_
             }
         }
     }
+
+    PROFILE_END();
 }
 
 void PhysicsNewFrame(ecs_iter_t* it)
@@ -285,6 +345,8 @@ void PhysicsNewFrame(ecs_iter_t* it)
 
 void GatherColliders(ecs_iter_t* it)
 {
+    PROFILE_BEGIN(GatherColliders);
+
     const PhysWorldBounds* bounds = ecs_term(it, PhysWorldBounds, 1);
     const PhysCollider* collider = ecs_term(it, PhysCollider, 3);
 
@@ -297,10 +359,14 @@ void GatherColliders(ecs_iter_t* it)
                 .layer = collider[i].layer,
             }));
     }
+
+    PROFILE_END();
 }
 
 void UpdateContactEvents(ecs_iter_t* it)
 {
+    PROFILE_BEGIN(UpdateContactEvents);
+
     int32_t len = (int32_t)arrlen(physics_ents);
     for (int32_t i = 0; i < len - 1; ++i) {
         for (int32_t j = i + 1; j < len; ++j) {
@@ -331,10 +397,14 @@ void UpdateContactEvents(ecs_iter_t* it)
             }
         }
     }
+
+    PROFILE_END();
 }
 
 void ProcessContactQueues(ecs_iter_t* it)
 {
+    PROFILE_BEGIN(ProcessContactQueues);
+
     PhysReceiver* r = ecs_term(it, PhysReceiver, 1);
 
     for (contact_type qtype = ContactType_Start; qtype < ContactType_Count; ++qtype) {
@@ -346,17 +416,25 @@ void ProcessContactQueues(ecs_iter_t* it)
         }
         arrsetlen(contact_queues[qtype], 0);
     }
+
+    PROFILE_END();
 }
 
 void RemovePhysEnt(ecs_iter_t* it)
 {
+    PROFILE_BEGIN(RemovePhysEnt);
+
     for (int32_t i = 0; i < it->count; ++i) {
         contact_queues_push_ent_remove(it->entities[i]);
     }
+
+    PROFILE_END();
 }
 
 void AttachBoxWorldBounds(ecs_iter_t* it)
 {
+    PROFILE_BEGIN(AttachBoxWorldBounds);
+
     const Position* position = ecs_term(it, Position, 1);
     const PhysCollider* collider = ecs_term(it, PhysCollider, 2);
     ecs_id_t ecs_id(PhysCollider) = ecs_term_id(it, 2);
@@ -370,10 +448,14 @@ void AttachBoxWorldBounds(ecs_iter_t* it)
 
         ecs_set_ptr(it->world, it->entities[i], PhysWorldBounds, &bounds);
     }
+
+    PROFILE_END();
 }
 
 void UpdateBoxWorldBounds(ecs_iter_t* it)
 {
+    PROFILE_BEGIN(UpdateBoxWorldBounds);
+
     const Position* position = ecs_term(it, Position, 1);
     const PhysCollider* collider = ecs_term(it, PhysCollider, 2);
     ecs_id_t ecs_id(PhysCollider) = ecs_term_id(it, 2);
@@ -385,10 +467,14 @@ void UpdateBoxWorldBounds(ecs_iter_t* it)
         const PhysBox* box = ecs_get_w_id(it->world, it->entities[i], ecs_id(PhysBox));
         box_to_bounds(position[i], box->size, &bounds[i].left);
     }
+
+    PROFILE_END();
 }
 
 void WorldBoundsView(ecs_iter_t* it)
 {
+    PROFILE_BEGIN(WorldBoundsView);
+
     PhysWorldBounds* bounds = ecs_term(it, PhysWorldBounds, 1);
 
     draw_set_prim_layer(0.0f);
@@ -403,10 +489,14 @@ void WorldBoundsView(ecs_iter_t* it)
         draw_line_rect_col(
             (vec2){bounds[i].left, bounds[i].top}, (vec2){bounds[i].right, bounds[i].bottom}, col);
     }
+
+    PROFILE_END();
 }
 
 void BoxColliderView(ecs_iter_t* it)
 {
+    PROFILE_BEGIN(BoxColliderViewBoxColliderView);
+
     Position* position = ecs_term(it, Position, 1);
     PhysCollider* collider = ecs_term(it, PhysCollider, 2);
     ecs_entity_t trait = ecs_term_id(it, 2);
@@ -426,6 +516,8 @@ void BoxColliderView(ecs_iter_t* it)
 
         draw_line_rect_col(p0, p1, cols[collider[i].layer]);
     }
+
+    PROFILE_END();
 }
 
 typedef struct physics_debug_gui_context {
