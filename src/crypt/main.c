@@ -748,9 +748,6 @@ void UpdateBounds(ecs_iter_t* it)
                 }
             }
         }
-
-        // draw_line_rect_col(
-        //     (vec2){bounds[i].l, bounds[i].t}, (vec2){bounds[i].r, bounds[i].b}, k_color_orange);
     }
 }
 
