@@ -313,25 +313,22 @@ void UpdateContactEvents(ecs_iter_t* it)
 
             ecs_entity_t ent0 = a->ent;
             ecs_entity_t ent1 = b->ent;
-            contact_type type = ContactType_None;
 
             if (phys_bounds_overlap(&a->bounds, &b->bounds)) {
                 bool started = contact_map_add_contact(ent0, ent1);
 
                 if (started) {
-                    type = ContactType_Start;
+                    contact_queues_push(ent0, ent1, ContactType_Start);
                 } else {
-                    type = ContactType_Continue;
+                    contact_queues_push(ent0, ent1, ContactType_Continue);
                 }
             } else {
                 bool ended = contact_map_del_contact(ent0, ent1);
 
                 if (ended) {
-                    type = ContactType_Stop;
+                    contact_queues_push(ent0, ent1, ContactType_Stop);
                 }
             }
-
-            contact_queues_push(ent0, ent1, type);
         }
     }
 }
