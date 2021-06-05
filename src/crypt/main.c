@@ -1,3 +1,4 @@
+#include "atomic_win32.h"
 #include "color.h"
 #include "debug_gui.h"
 #include "game_components.h"
@@ -7,6 +8,7 @@
 #include "strhash.h"
 #include "system_imgui.h"
 #include "system_sdl2.h"
+#include "thread_api_stdc11.h"
 #include "tx_input.h"
 #include "tx_math.h"
 #include "tx_rand.h"
@@ -232,6 +234,9 @@ int main(int argc, char* argv[])
     ecs_world_t* world = ecs_init_w_args(argc, argv);
     ecs_set_target_fps(world, 144.0f);
     ecs_set_time_scale(world, 1.0f);
+    set_ecs_os_thread_api_stdc11();
+    set_ecs_os_atomic_api_win32();
+    ecs_set_threads(world, 8);
 
     ECS_IMPORT(world, GameComp);
     ECS_IMPORT(world, SystemSdl2);
