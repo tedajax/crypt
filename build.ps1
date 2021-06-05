@@ -42,7 +42,10 @@ param (
     [string] $platform = "Win64",
 
     [ValidateSet("Debug", "Release")]
-    [string] $configuration = "Debug"
+    [string] $configuration = "Debug",
+
+    [switch] $genProjects = $false,
+    [switch] $installDependencies = $false
 )
 
 $dependencies = "sdl2", "stb", "sokol", "gl3w", "jsmn", "xxhash"
@@ -181,18 +184,20 @@ function Install-VcpkgDependencies() {
 
 
 # Install dependencies with vcpkg
-$vcpkg = "vcpkg.exe"
-if (Get-Command $vcpkg -ErrorAction SilentlyContinue) {
-    $triplet = "x64-windows"
-    if ($platform -eq "Win32") {
-        $triplet = "x86-windows"
-    }
+if ($installDependencies) {
+    $vcpkg = "vcpkg.exe"
+    if (Get-Command $vcpkg -ErrorAction SilentlyContinue) {
+        $triplet = "x64-windows"
+        if ($platform -eq "Win32") {
+            $triplet = "x86-windows"
+        }
 
-    Install-VcpkgDependencies -triplet $triplet -dependencies $dependencies
-}
-else {
-    Write-Host "$vcpkg not found"
-    exit
+        Install-VcpkgDependencies -triplet $triplet -dependencies $dependencies
+    }
+    else {
+        Write-Host "$vcpkg not found"
+        exit
+    }
 }
 
 # configure vswhere parameters
@@ -220,15 +225,20 @@ $ms_build = Invoke-Expression $find_ms_build_cmd
 $steps = $build_action_steps[$buildAction];
 
 if ($steps.do_build) {
-    $ms_build_action = $ms_build_actions[$buildAction]
-
+    $solutionTarget = "bin/$target.sln"
+    $solutionNeedsGen = $genProjects
+    
+    if (!(Test-Path -PathType Leaf -Path $solutionTarget)) {
+        $solutionNeedsGen = $true
+    }
+    
+    if ($solutionNeedsGen) {
+        premake5 "vs$vs_version"
+    }
+    
     # Configure MSBuild parameters
+    $ms_build_action = $ms_build_actions[$buildAction]
     $ms_build_cmd = """$ms_build"" /t:$ms_build_action bin/$target.sln /p:Platform=$platform /p:Configuration=$configuration /m"
-
-    # Execute build steps
-    # generate project files
-    premake5 "vs$vs_version"
-
 
     # build project files
     Invoke-Expression "& $ms_build_cmd"
