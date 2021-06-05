@@ -44,7 +44,6 @@ param (
     [ValidateSet("Debug", "Release")]
     [string] $configuration = "Debug",
 
-    [switch] $genProjects = $false,
     [switch] $installDependencies = $false
 )
 
@@ -225,16 +224,7 @@ $ms_build = Invoke-Expression $find_ms_build_cmd
 $steps = $build_action_steps[$buildAction];
 
 if ($steps.do_build) {
-    $solutionTarget = "bin/$target.sln"
-    $solutionNeedsGen = $genProjects
-    
-    if (!(Test-Path -PathType Leaf -Path $solutionTarget)) {
-        $solutionNeedsGen = $true
-    }
-    
-    if ($solutionNeedsGen) {
-        premake5 "vs$vs_version"
-    }
+    premake5 "vs$vs_version"
     
     # Configure MSBuild parameters
     $ms_build_action = $ms_build_actions[$buildAction]
