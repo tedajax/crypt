@@ -66,11 +66,11 @@ project "crypt"
         architecture "x86_64"
 
     filter "configurations:Debug"
-        defines { "_DEBUG" }
+        defines { "DEBUG", "_DEBUG" }
         symbols "On"
 
     filter "configurations:Release"
         kind "WindowedApp"
-        defines { "_NDEBUG" }
+        defines { "NDEBUG", "_NDEBUG" }
         optimize "On"
 
