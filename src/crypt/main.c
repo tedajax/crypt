@@ -296,8 +296,7 @@ int main(int argc, char* argv[])
         InvaderRoot:game.comp.Position, InvaderRoot:Bounds);
     ECS_SYSTEM(world, InvaderMovement, EcsOnUpdate,
         game.comp.Position, game.comp.Velocity, InvaderTarget, ANY:InvaderConfig);
-    ECS_SYSTEM(world, AddInvaders, EcsOnSet,
-        InvaderControlContext, InvadersConfig, InvaderRoot:game.comp.Position,
+    ECS_SYSTEM(world, AddInvaders, EcsOnSet, InvadersConfig, InvaderRoot:game.comp.Position,
         :game.comp.LocalPosition, :game.comp.Velocity, :physics.Box, :physics.Collider);
     ECS_SYSTEM(world, RemoveInvaders, EcsUnSet,
         InvaderControlContext, InvadersConfig);
@@ -571,19 +570,18 @@ void RemoveInvaders(ecs_iter_t* it)
 
 void AddInvaders(ecs_iter_t* it)
 {
-    InvaderControlContext* context = ecs_term(it, InvaderControlContext, 1);
-    InvadersConfig* config = ecs_term(it, InvadersConfig, 2);
-    Position* root = ecs_term(it, Position, 3);
+    InvadersConfig* config = ecs_term(it, InvadersConfig, 1);
+    Position* root = ecs_term(it, Position, 2);
 
     *root = (vec2){-14, -8};
 
     ecs_entity_t root_ent = ecs_lookup(it->world, "InvaderRoot");
 
-    ecs_id_t ecs_id(Position) = ecs_term_id(it, 3);
-    ecs_id_t ecs_id(LocalPosition) = ecs_term_id(it, 4);
-    ecs_id_t ecs_id(Velocity) = ecs_term_id(it, 5);
-    ecs_id_t ecs_id(PhysBox) = ecs_term_id(it, 6);
-    ecs_id_t ecs_id(PhysCollider) = ecs_term_id(it, 7);
+    ecs_id_t ecs_id(Position) = ecs_term_id(it, 2);
+    ecs_id_t ecs_id(LocalPosition) = ecs_term_id(it, 3);
+    ecs_id_t ecs_id(Velocity) = ecs_term_id(it, 4);
+    ecs_id_t ecs_id(PhysBox) = ecs_term_id(it, 5);
+    ecs_id_t ecs_id(PhysCollider) = ecs_term_id(it, 6);
 
     int32_t num_invaders = config->invader_cols * config->invader_rows;
     for (int32_t i = 0; i < num_invaders; ++i) {
