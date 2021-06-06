@@ -19,6 +19,8 @@ uint8_t* context_mem_head = context_memory;
 
 ecs_world_stats_t world_stats = {0};
 
+ImFont* debug_gui_font;
+
 void* store_context(void* ctx, size_t size)
 {
     if (!ctx || !size) {
@@ -195,7 +197,7 @@ void debug_panel_gui(ecs_world_t* world, void* ctx)
         &(struct gauge_plot_desc){
             .title = "FPS Plot",
             .gauge = &stats->fps,
-            .size = (ImVec2){360.f, 100.f},
+            .size = (ImVec2){600.f, 100.f},
             .vmin = 0,
             .vmax = 160,
             .markers = {
@@ -210,7 +212,7 @@ void debug_panel_gui(ecs_world_t* world, void* ctx)
         &(struct gauge_plot_desc){
             .title = "Frame time Plot",
             .gauge = &stats->frame_time_total.rate,
-            .size = (ImVec2){360.f, 100.f},
+            .size = (ImVec2){600.f, 100.f},
             .vmin = 0,
             .vmax = 1.f / 15,
             .markers = {
@@ -287,7 +289,7 @@ static void UpdateDebugWindows(ecs_iter_t* it)
         }
 
         if (window[i].is_visible) {
-            if (igBegin(window[i].name, &window[i].is_open, ImGuiWindowFlags_None)) {
+            if (igBegin(window[i].name, &window[i].is_open, window[i].flags)) {
                 if (window[i].window_fn) {
                     window[i].window_fn(it->world, window[i].ctx);
                 }
@@ -318,9 +320,16 @@ static void UnloadDebugWindowContext(ecs_iter_t* it)
     }
 }
 
+void DemoWindow(ecs_iter_t* it)
+{
+    igShowDemoWindow(NULL);
+}
+
 void DebugGuiImport(ecs_world_t* world)
 {
     ECS_MODULE(world, DebugGui);
+
+    ECS_IMPORT(world, SystemImgui);
 
     ecs_set_name_prefix(world, "Debug");
 
@@ -328,7 +337,8 @@ void DebugGuiImport(ecs_world_t* world)
 
     ECS_SYSTEM(world, StoreDebugWindowContext, EcsOnSet, DebugWindow);
     ECS_SYSTEM(world, UnloadDebugWindowContext, EcsUnSet, DebugWindow);
-    ECS_SYSTEM(world, UpdateDebugWindows, EcsPreStore, DebugWindow);
+    ECS_SYSTEM(world, UpdateDebugWindows, EcsPreStore, DebugWindow, $system.imgui.Context);
+    // ECS_SYSTEM(world, DemoWindow, EcsPreStore, :DemoWindow);
 
     ECS_IMPORT(world, GameComp);
 
@@ -336,6 +346,7 @@ void DebugGuiImport(ecs_world_t* world)
     DEBUG_PANEL(
         world,
         DebugPanel,
+        ImGuiWindowFlags_AlwaysAutoResize,
         "`",
         debug_panel_gui,
         debug_panel_context,

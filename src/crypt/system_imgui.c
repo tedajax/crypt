@@ -7,29 +7,25 @@
 
 static void AttachImgui(ecs_iter_t* it)
 {
-    ecs_id_t ecs_typeid(Sdl2Window) = ecs_term_id(it, 1);
-    ecs_id_t ecs_typeid(Sdl2GlContext) = ecs_term_id(it, 2);
-    ecs_entity_t ecs_typeid(ImguiContext) = ecs_term_id(it, 4);
+    Sdl2Window* window = ecs_term(it, Sdl2Window, 1);
+    Sdl2GlContext* gl = ecs_term(it, Sdl2GlContext, 2);
+    ecs_id_t ecs_typeid(ImguiContext) = ecs_term_id(it, 4);
 
-    for (int32_t i = 0; i < it->count; ++i) {
-        ecs_entity_t ent = it->entities[i];
-
-        const Sdl2Window* window = ecs_get(it->world, ent, Sdl2Window);
-        const Sdl2GlContext* gl = ecs_get(it->world, ent, Sdl2GlContext);
-
-        igCreateContext(NULL);
-        ImGuiIO* imgui = igGetIO();
-        imgui->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-        ImGui_ImplSDL2_InitForOpenGL(window->window, gl->gl);
-        ImGui_ImplOpenGL3_Init(NULL);
-        igStyleColorsDark(NULL);
-
-        ecs_set(it->world, ent, ImguiContext, {.io = imgui});
+    if (ecs_singleton_get(it->world, ImguiContext)) {
+        return;
     }
-}
 
-static void DetachImgui(ecs_iter_t* it)
-{
+    igCreateContext(NULL);
+    ImGuiIO* imgui = igGetIO();
+    imgui->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGui_ImplSDL2_InitForOpenGL(window->window, gl->gl);
+    ImGui_ImplOpenGL3_Init(NULL);
+    igStyleColorsDark(NULL);
+
+    ImFont* editor_font = ImFontAtlas_AddFontFromFileTTF(
+        imgui->Fonts, "assets/fonts/FiraCode-Regular.ttf", 24.0f, NULL, NULL);
+
+    ecs_singleton_set(it->world, ImguiContext, {.io = imgui, editor_font = editor_font});
 }
 
 static void ImguiNewFrame(ecs_iter_t* it)
@@ -67,6 +63,8 @@ void SystemImguiImport(ecs_world_t* world)
 
     ecs_set(world, Sdl2, Sdl2Input, {.event_fn = on_sdl2_event});
 
+    ecs_set_name_prefix(world, "Imgui");
+
     ECS_COMPONENT(world, ImguiContext);
     ECS_COMPONENT(world, ImguiDesc);
 
@@ -77,8 +75,8 @@ void SystemImguiImport(ecs_world_t* world)
         [in] system.imgui.ImguiDesc,
         [out] :system.imgui.ImguiContext);
 
-    ECS_SYSTEM(world, ImguiNewFrame, EcsPostLoad, system.sdl2.Window, system.imgui.ImguiContext);
-    ECS_SYSTEM(world, ImguiRender, EcsPostStore, system.imgui.ImguiContext);
+    ECS_SYSTEM(world, ImguiNewFrame, EcsPostLoad, system.sdl2.Window, $system.imgui.Context);
+    ECS_SYSTEM(world, ImguiRender, EcsPostStore, $system.imgui.Context);
     // clang-format on
 
     ECS_EXPORT_COMPONENT(ImguiContext);

@@ -1,4 +1,5 @@
 #include "color.h"
+#include "curves.h"
 #include "debug_gui.h"
 #include "game_components.h"
 #include "physics.h"
@@ -238,6 +239,7 @@ int main(int argc, char* argv[])
     ECS_IMPORT(world, DebugGui);
     ECS_IMPORT(world, SpriteRenderer);
     ECS_IMPORT(world, Physics);
+    ECS_IMPORT(world, GameCurves);
 
     ecs_entity_t window =
         ecs_set(world, EcsWorld, WindowConfig, {.title = "crypt", .width = 1920, .height = 1080});
@@ -413,6 +415,7 @@ int main(int argc, char* argv[])
     DEBUG_PANEL(
         world,
         Tank,
+        ImGuiWindowFlags_None,
         "shift+1",
         tank_debug_gui,
         tank_debug_context,
@@ -423,6 +426,7 @@ int main(int argc, char* argv[])
     DEBUG_PANEL(
         world,
         InvaderRootControl,
+        ImGuiWindowFlags_None,
         "shift+2",
         invader_control_debug_gui,
         invader_control_debug_context,

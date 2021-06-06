@@ -606,6 +606,7 @@ void PhysicsImport(ecs_world_t* world)
     DEBUG_PANEL(
         world,
         PhysicsDebug,
+        ImGuiWindowFlags_None,
         "shift+3",
         physics_debug_gui,
         physics_debug_gui_context,

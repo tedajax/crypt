@@ -3,6 +3,7 @@
 #include "flecs.h"
 
 typedef struct ImGuiIO ImGuiIO;
+typedef struct ImFont ImFont;
 
 typedef struct ImguiDesc {
     int dummy;
@@ -10,6 +11,7 @@ typedef struct ImguiDesc {
 
 typedef struct ImguiContext {
     ImGuiIO* io;
+    ImFont* editor_font;
 } ImguiContext;
 
 typedef struct SystemImgui {
