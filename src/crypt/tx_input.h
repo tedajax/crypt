@@ -1,7 +1,6 @@
 #pragma once
 
 #include "stb_ds.h"
-#include "strhash.h"
 #include "tx_types.h"
 #include <string.h>
 
@@ -622,14 +621,14 @@ txinp_mod txinp_mods_down(txinp_mod mod)
     return (txinp_state[TXINP_CURR].mod & mod) == mod;
 }
 
-strhash txinp_shortcut_strhash(txinp_mod mod, const char* key)
+str_id txinp_shortcut_str_id(txinp_mod mod, const char* key)
 {
     char* buf = NULL;
     int32_t need = txinp_write_mod_strn(mod, key, buf, 0);
     arrsetlen(buf, need + 1);
     memset(buf, 0, (size_t)need);
     txinp_write_mod_strn(mod, key, buf, need + 1);
-    strhash ret = strhash_get(buf);
+    str_id ret = str_id_store(buf);
     arrfree(buf);
     return ret;
 }

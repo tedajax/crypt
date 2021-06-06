@@ -1,6 +1,5 @@
 #pragma once
 
-#include "strhash.h"
 #include "tx_types.h"
 
 typedef struct game_settings {

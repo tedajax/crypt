@@ -4,7 +4,6 @@
 #include "physics.h"
 #include "profile.h"
 #include "sprite_renderer.h"
-#include "strhash.h"
 #include "system_imgui.h"
 #include "system_sdl2.h"
 #include "tx_input.h"
@@ -225,7 +224,7 @@ int main(int argc, char* argv[])
     PROFILE_INIT();
 
     txrng_seed((uint32_t)time(NULL));
-    strhash_init();
+    str_id_init();
 
     ecs_tracing_enable(1);
 
@@ -312,7 +311,7 @@ int main(int argc, char* argv[])
     ECS_SYSTEM(world, ApplyDamage, EcsOnSet,
         Health, Damage, :sprite.renderer.SpriteColor, :ExpireAfter);
     ECS_SYSTEM(world, InitializeHealth, EcsOnSet, [in] ANY:MaxHealth, !Health);
-
+    
     // entities using an expire after component from a prerab will need to copy the prefab value into their own instance
     ECS_SYSTEM(world, CopyExpireAfter, EcsOnSet, SHARED:ExpireAfter);
     ECS_TRIGGER(world, OnInvaderRemoved, EcsOnRemove, InvaderTarget);
@@ -435,6 +434,7 @@ int main(int argc, char* argv[])
     int result = ecs_fini(world);
 
     PROFILE_TERMINATE();
+    str_id_term();
 
     return result;
 }

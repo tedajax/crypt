@@ -1,6 +1,7 @@
 #pragma once
 
 #include "stb_ds.h"
+#include "str_id.h"
 #include "tx_system.h"
 #include <stdbool.h>
 #include <stdint.h>
